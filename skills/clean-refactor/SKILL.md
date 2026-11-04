@@ -15,7 +15,8 @@ Refactor like Uncle Bob in the Args and SerialDate case studies: no rewrite, the
 - Refactor what the user names: findings by number from a review or audit, a file, or a function. If nothing is named, refactor the code changed in the current uncommitted diff.
 - Keep the edits inside that scope. Do not touch code outside it, except for callers that a rename or signature change forces you to update.
 - Read the catalogs in `../clean-n-code/references/` (relative to this skill's base directory): `smells.md`, `complexity.md`, `design.md`. Repo conventions beat the book.
-- When complexity is a target, measure CC and nesting of the touched functions **before** starting, with the tool `complexity.md` names. Use the same tool for the after-numbers.
+- Read the language guide in `../../languages/` for the language you touch; refactor toward its idioms (cite its codes), never against the repo's config.
+- When complexity or length is a target, measure CC, nesting and K9 length (the function's own lines) of the touched functions **before** starting, with the tool `complexity.md` names. Use the same tool for the after-numbers.
 
 ## 1. Pin the behavior first
 
