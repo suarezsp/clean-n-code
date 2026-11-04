@@ -1,12 +1,13 @@
 # Control-flow complexity
 
-Cite codes **K1–K8** in findings. Apply them only to code the task already creates or touches. Ponytail's scope rules still decide what gets written.
+Cite codes **K1–K9** in findings. Apply them only to code the task already creates or touches. The task's scope still decides what gets written.
 
 Sources:
 - NIST SP 500-235, *Structured Testing* (Watson & McCabe, 1996), §2.5.
 - SonarSource, *Cognitive Complexity* white paper (G. Ann Campbell, 2023 edition).
 - Fowler, refactoring.com catalog.
-- Martin, *Clean Code* chapter 3, p66.
+- Martin, *Clean Code* chapter 3, p34 and p66.
+- Google Python Style Guide §3.18 "Function length".
 
 ## The two metrics
 - **Cyclomatic complexity (CC)** counts decision points plus one: every `if`, `else if`, loop, `case`, `catch`, `&&`, `||` and `?:` adds one. CC equals the number of basis-path tests needed to cover the function (NIST §5). Use it to answer "how many tests does this need?".
@@ -26,6 +27,8 @@ Sources:
 - **K7 Flag-driven control flow.** Fixes: *Remove Flag Argument* (F3), *Replace Control Flag with Break*. A loop that does two jobs: *Split Loop*, or *Replace Loop with Pipeline* (map, filter, comprehension) when the language idiom favours it.
 - **K8 Gaming the metric.** Never lower a number without lowering the real difficulty. NIST warns against "modified" metrics that, for example, divide by switch branches, and against splitting a function into helpers that only make sense together. Extract only when the new function has a name that is not a restatement of its body (G34, *Clean Code* p67).
 
+- **K9 Function length counts the function only.** Size is the function's own logical lines: from its signature to its closing line, without blank lines, comment-only lines or docstrings. Nothing around it counts: not the package line, imports, type or struct declarations, constants, other functions, or prose. A named function or closure defined inside another counts as its own function, as lizard reports it. *Clean Code* p34: functions "should hardly ever be 20 lines long"; Google Python §3.18 treats about 40 lines as the point to consider splitting. Aim for 20 or fewer. Over 40 is a finding, except a flat dispatch or table (see K5). Measure it as lizard's per-function NLOC. When counting by hand, use the same definition and say so. Split only along real steps with names of their own (K8, G34), never just to get under the number.
+
 ## When a high CC is fine
 - A flat `switch` or dispatch table where each case is one simple line. McCabe exempted these; cognitive complexity stays at 1. Prefer a table if the language has one.
 - Generated code, parsers produced by a grammar tool, and state machines that mirror a spec. Say so in the finding instead of flagging the code.
@@ -37,7 +40,7 @@ Use the first tool that is available. **Never add a dependency to the project ju
    - JS/TS: eslint's `complexity` rule, or `sonarjs/cognitive-complexity` if installed.
    - Go: `gocyclo -over 10` and `gocognit -over 15`.
    - Java: Checkstyle `CyclomaticComplexity`, or PMD.
-2. **A run-once tool**, without installing it into the project: `uvx lizard -C 10 -w <files>` covers many languages (CCN and length). This needs network access and the user's permission to run downloaded code. If it is not available, say so.
+2. **A run-once tool**, without installing it into the project: `uvx lizard -C 10 -w <files>` covers many languages (CCN, and per-function NLOC for K9). This needs network access and the user's permission to run downloaded code. If it is not available, say so.
 3. **Count by hand** with the rules above, and state that the numbers are manual estimates.
 
-Report numbers per function: `name  CC=12  nesting=4  (cognitive ≈ 18)`. When you refactor, measure before and after **with the same tool**.
+Report numbers per function: `name  CC=12  nesting=4  length=34  (cognitive ≈ 18)`, where length is K9's count of the function itself. When you refactor, measure before and after **with the same tool**.

@@ -3,67 +3,72 @@ name: clean-n-code
 description: >
   Clean code mode from Robert C. Martin's Clean Code: names that reveal intent,
   small functions that do one thing, comments only for the why, errors with
-  context, clean tests. Reinforces ponytail: ponytail decides what code to
-  write, clean-n-code decides how it reads. Use on any coding task and when the
-  user says "clean code", "clean-n-code", "make it readable", "uncle bob".
+  context, clean tests, and a security baseline (secrets, trust boundaries,
+  access control). Use on any coding task and when the user says "clean code",
+  "clean-n-code", "make it readable", "uncle bob".
 license: MIT
 ---
 
 # Clean-n-code
 
-You write code the next reader understands at a glance. You work alongside ponytail. Ponytail decides **what** gets written: scope, YAGNI, the smallest diff. You decide **how** it reads. When the two seem to conflict, ponytail's scope wins. Readability is achieved inside that scope, never by adding scope.
+You write code the next reader understands at a glance and an attacker cannot easily abuse. Scope comes first: make the smallest change that fully solves the task, with no features or flexibility nobody asked for. Readability is achieved inside that scope, never by adding scope. Security is never cut to keep a diff small.
 
 Active for the whole session until the user says "stop clean-n-code".
 
 ## Names
-- Reveal intent: why it exists, what it does, how it is used. If a name needs a comment, rename it.
-- Make name length follow scope: `i` for a three-line loop, precise words for anything wider.
-- Use one word per concept across the codebase. No puns, no encodings (`m_`, type prefixes), no noise words (`Data`, `Info`, `Manager`).
-- Functions are verbs and say every effect: whether they mutate or return new, and what they create. Classes are nouns.
-- Use the repo's domain language. Use pattern names when you implement a pattern.
+- Reveal intent: why it exists, what it does, how it is used. If a name needs a comment, rename it (N1).
+- Make name length follow scope: `i` for a three-line loop, precise words for anything wider (N5).
+- One word per concept across the codebase (G11). No encodings like `m_` or type prefixes (N6), no noise words (`Data`, `Info`, `Manager`).
+- Functions are verbs and say every effect, mutation or creation (G20, N7). Classes are nouns. Use the repo's domain language (N3).
 
 ## Functions
-- Do one thing, at one level of abstraction below the name. Order code so callers sit above callees and it reads top-down.
-- Aim for few arguments, ideally 0 to 2. No boolean flags or selector arguments: write two functions. No output arguments.
-- Either change state or answer a question, never both.
-- No hidden side effects. If order matters, make each step take the previous step's result.
-- Name complex conditions (`shouldBeDeleted(timer)`), prefer positive conditions, and use explanatory variables for intermediate values.
+- Do one thing, one level of abstraction below the name (G30, G34). Callers sit above callees so it reads top-down (G10).
+- Keep a function short: aim for 20 or fewer lines of the function itself; imports, types, constants and other functions don't count (K9).
+- Few arguments, ideally 0 to 2 (F1). No boolean flags or selector arguments: write two functions (F3, G15). No output arguments (F2).
+- Either change state or answer a question, never both. No hidden side effects; if order matters, pass each step's result to the next (G31).
+- Name complex conditions (G28), prefer positive ones (G29), and use explanatory variables (G19).
 
 ## Comments
-- Explain the why the code cannot show: intent, a warning, a non-obvious constraint. Everything else becomes a better name or function.
-- Never leave commented-out code, change logs, bylines or comments that just restate the code.
-- A deferral uses the existing marker: `shortcut: <limit>, <when to upgrade>`.
+- Explain only the why the code can't show: intent, a warning, a constraint. Everything else becomes a better name (C3).
+- No commented-out code (C5), change logs or bylines (C1). A deferral uses `shortcut: <limit>, <when to upgrade>`.
 
 ## Errors
-- Use the language's idiomatic error mechanism, not magic return codes. Every error says what operation failed and why.
-- Keep error handling apart from the happy path. In a function that handles errors, `try` comes first and nothing follows the `catch`.
-- Don't return or pass null when an empty collection, a special-case object, an optional or an error fits.
+- Use the language's idiomatic error mechanism, not magic return codes. Every error says what failed and why.
+- Keep error handling apart from the happy path. Don't return or pass null when an empty collection, an optional or an error fits.
 - Never swallow an exception silently. If ignoring it is intended, the name says so (`closeIgnoringException`).
 
 ## Tests
-- Hold test code to the same standard as production code. Tests must be Fast, Independent, Repeatable (no network, locale or clock dependence), Self-validating and Timely.
-- One concept per test. Follow build-operate-check. Test boundary values.
+- Test code meets production standards: fast (T9), independent and repeatable (no network, locale or clock), self-validating, timely.
+- One concept per test, build-operate-check, boundary values tested (T5).
 
 ## Structure
-- A class has one reason to change. Split it when it really has two, not before.
-- Talk to direct collaborators only: no `a.getB().getC()`. Tell objects what to do instead of asking for their internals.
-- Use plain data structures for data and objects for behavior. Don't build hybrids.
-- Defaults and config live at the top level and are passed down. No magic numbers or strings.
+- One reason to change per class; split only when there really are two. No train wrecks like `a.getB().getC()` (G36).
+- Plain data structures for data, objects for behavior, no hybrids (D6). Config lives at the top and is passed down (G35); no magic numbers (G25).
 
 ## Complexity & design
-- Keep each function at cyclomatic complexity 10 or under, and nesting at 2 or under. Lower them for real: use guard clauses, named conditions, a lookup table instead of an if-ladder, and polymorphism only for a type switch that repeats. Never add helpers that only exist to shrink a number.
-- Hide each decision likely to change (a format, a protocol, a rule) behind one module. Dependencies point inward: domain logic never imports the framework.
-- Keep logic pure and push I/O, time and randomness to the edges. Use the paradigm the language and repo are idiomatic in.
-- Pick the data structure by how it is accessed. Choose the simple algorithm, and measure before optimizing. A new dependency is inspected first (only after ponytail's order says one is needed).
-- Details and codes: `references/complexity.md` (K1–K8) and `references/design.md` (D1–D16). They apply to code the task touches, never as a reason to add scope.
+- Cyclomatic complexity ≤ 10 (K1) and nesting ≤ 2 (K2). Lower them for real: guard clauses (K3), named conditions (K4), a lookup table instead of an if-ladder (K5). Never add helpers that only exist to shrink a number (K8).
+- Hide each decision likely to change behind one module (D1). Dependencies point inward (D5). Pure logic, with I/O, time and randomness at the edges (D10).
+- Pick the data structure by access pattern (D15) and measure before optimizing (D14). Reuse first: the codebase, then the standard library, then an installed dependency, then minimal new code. Inspect a new dependency first (D12).
+
+## Security
+- No secret in code, committed config, logs, URLs or errors (S7). Read secrets at runtime (S8). A leaked key is revoked and rotated, not just deleted (S10).
+- Input from outside the process is untrusted: validate it at the boundary (S12), parameterize queries and commands (S13), encode output for its context (S14).
+- Deny by default (S2). Authenticate every non-public endpoint and authorize per object on the server (S18).
+- Bound every resource (S19). Fail closed: clients get a generic error, logs get the detail without secrets (S21).
+- Vetted crypto and a CSPRNG for tokens (S20), passwords with a slow salted hash (S11), locked and audited dependencies (S23).
+
+## Language idioms
+- When a language card is in this context, write from it and cite its codes (`GO9`).
+- Open the full guide in `../../languages/` (`python.md`, `go.md`, `rust.md`…) only when the card doesn't settle a decision, or when the task writes more than one function in a language with no card here. Reviews, audits, refactors and security checks read the guide themselves.
+- The repo's config beats the guide, and on idiom the guide beats the general rules.
 
 ## When rules collide
 - Repo, linter and team conventions beat these rules.
-- Clean only the code your change already touches (Boy Scout), with small local improvements, and name them in the reply.
-- Add an abstraction, wrapper or interface only when the duplication or volatility already exists, never "for later".
-- More lines are fine when they buy clarity. More lines for speculation are not.
-- To refactor existing code: tests first, then tiny steps, with the full suite green after each step.
+- Clean only the code your change touches (Boy Scout), and name those improvements in the reply.
+- Add an abstraction only when the duplication or volatility already exists, never "for later". More lines are fine when they buy clarity, not for speculation.
+- To refactor: tests first, then tiny steps, with the suite green after each one.
+- Deep catalogs, only when a decision needs them: `references/smells.md`, `references/complexity.md`, `references/design.md`, `references/security.md`.
 
-Never cut: anything ponytail never cuts (validation at trust boundaries, error handling that prevents data loss, security, accessibility), and error context.
+Never cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, and error context.
 
-End your reply with one line naming the clean-code rules you applied, using the codes from `references/smells.md`, `references/complexity.md` and `references/design.md` (for example `N7, G28, K3`), plus anything you left unclean on purpose.
+End your reply with one line: `Applied:` followed by the codes of the rules you used, then anything left unclean on purpose. Cite only codes printed in this context (the rules above and any language card). Never open a catalog just to find a code, and never invent one.
