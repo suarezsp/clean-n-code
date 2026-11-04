@@ -14,29 +14,32 @@ clean-n-code decides **how code reads**: intent-revealing names, flat functions,
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-D97757?style=for-the-badge&logo=anthropic&logoColor=white)](https://docs.claude.com/en/docs/claude-code)
 [![Node](https://img.shields.io/badge/Node-18+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-48_unit_+_3_evals-2EA44F?style=for-the-badge)](#testing)
+[![Tests](https://img.shields.io/badge/tests-130_unit_+_5_evals-2EA44F?style=for-the-badge)](#testing)
 [![Clean Code](https://img.shields.io/badge/based_on-Clean_Code_(2009)-555555?style=for-the-badge)](knowledge.md)
 
-**MIT** | Claude Code plugin | Skills + SessionStart hook
+**MIT** | Claude Code plugin | Skills + SessionStart and secret-blocking hooks
 
 </div>
 
 ---
 
-> **clean-n-code** turns Robert C. Martin's *Clean Code* into skills an agent follows while it works. It is backed by primary sources on cyclomatic and cognitive complexity (NIST/McCabe, SonarSource), module design (Parnas), architecture, dependencies and algorithms. Every rule carries a short code (`G5`, `N7`, `K3`, `D12`), so reviews cite the heuristic behind each finding, the way the book does.
+> **clean-n-code** turns Robert C. Martin's *Clean Code* into skills an agent follows while it works. It is backed by primary sources on cyclomatic and cognitive complexity (NIST/McCabe, SonarSource), module design (Parnas), architecture, dependencies and algorithms. It also carries a security baseline every piece of software should meet, from Saltzer & Schroeder's design principles, the OWASP Secrets Management Cheat Sheet, NIST SP 800-63B-4, the 2025 CWE Top 25, the OWASP Top 10:2025 and the OWASP API Security Top 10. Every rule carries a short code (`G5`, `N7`, `K3`, `D12`, `S13`), so reviews cite the heuristic behind each finding, the way the book does.
 
 > We believe that actual literature can help agents improve their reasoning, specially when inside their context and rules.
 ---
 
 ## What is clean-n-code?
 
-clean-n-code is a **Claude Code plugin**: one always-on mode plus four slash-command skills.
+clean-n-code is a **Claude Code plugin**: one always-on mode, a hook that blocks writing secrets, and five slash-command skills.
 
-- **Always-on mode** writes readable code while the agent works: intent-revealing names, functions at one level of abstraction, cyclomatic complexity of 10 or less, nesting of 2 or less, errors with context, F.I.R.S.T. tests.
+- **Always-on mode** writes readable code while the agent works: intent-revealing names, functions at one level of abstraction, cyclomatic complexity of 10 or less, nesting of 2 or less, errors with context, F.I.R.S.T. tests, and a security baseline: no secrets in code, untrusted input validated at the boundary, deny by default, bounded resources, fail closed.
+- **Language guides** in `languages/` cover the 10 most used languages (Stack Overflow Developer Survey 2025) plus C and Rust: Python, JavaScript, TypeScript, Java, C#, C++, Go, PHP, SQL, Bash, C and Rust. Each one is built from the language's own manuals and the engineering literature (PEPs, Effective Go, C++ Core Guidelines, SEI CERT C, Rust API Guidelines, Microsoft Learn, PER Coding Style…), with citable codes (`PY4`, `GO9`, `RS11`). The mode reads the guide for the language it is writing.
+- **Secret-blocking hook** rejects any Write or Edit that would put a known key format (AWS, GitHub, Slack, Stripe, Anthropic, OpenAI, Google, PEM private keys) into a file.
 - **Review, audit, and refactor skills** measure complexity, cite rule codes, and keep fixes inside the existing task scope. Readability is achieved inside the scope, never by adding scope.
 
 ```text
 /clean-review          # readability/design review of your current change
+/clean-secure          # security review: secrets, access control, injection, limits
 /clean-audit           # the same for a whole repo, ranked
 /clean-refactor        # fix findings without changing behavior
 ```
@@ -66,6 +69,7 @@ Also noticed: express items with qty <= 0 are added to the list; probably a bug,
 |-------|---------|:----------:|-------------|
 | **clean-n-code** | always on (session hook) | as part of your task | Writes code that reads clean; ends each reply with the rule codes it applied. |
 | **clean-review** | `/clean-review` | NO | Reviews a change for naming, function design, complexity, design and tests. Each finding has a code, a concrete cost and the smallest fix. |
+| **clean-secure** | `/clean-secure` | NO | Security review of a change or repo. Maps trust boundaries, then checks secrets, access control (BOLA), injection, limits, crypto, logging and dependencies. Each finding has an S code, a CWE id and a concrete attack. |
 | **clean-audit** | `/clean-audit` | NO | Reviews the whole repo, ranked by cost to the next reader and by measured complexity × churn. |
 | **clean-refactor** | `/clean-refactor` | YES | Characterization tests first, then tiny steps with the suite green after each one. Reports complexity before → after. |
 | **clean-help** | `/clean-help` | NO | Reference card. |
@@ -78,7 +82,8 @@ Also noticed: express items with qty <= 0 are added to the list; probably a bug,
 
 - **Agents write code that works but reads badly.** It comes out with vague names, nested arrow code, flag arguments and comments that restate the code. The always-on mode prevents this while the code is being written.
 - **Human reviewers catch complexity that tools miss.** clean-n-code measures cyclomatic complexity, then reasons like a reader would: cognitive complexity, nesting, guard clauses, and not flagging a flat dispatch.
-- **Bug reviews and readability reviews get mixed up.** `/clean-review` covers readability and design; it points bugs, security and load issues elsewhere rather than owning them.
+- **Bug reviews and readability reviews get mixed up.** `/clean-review` covers readability and design; security findings go to `/clean-secure`, which owns them.
+- **Agents paste API keys into code.** The hook blocks the write before it happens, and the always-on rules say where secrets live instead and what to do when one leaks (revoke, rotate, then clean up).
 
 > `As AI improves, reviewing code is more and more difficult, specially in big projects. This tool improves that, so not only you can understand what is going on and make better decisions, but AI can make less mistakes when updating, upgrading, refactoring...`
 
@@ -91,24 +96,64 @@ Also noticed: express items with qty <= 0 are added to the list; probably a bug,
   plugin.json            plugin manifest (hooks → hooks/hooks.json)
   marketplace.json       local marketplace for /plugin install
 hooks/
-  hooks.json             SessionStart + SubagentStart → activate.js
-  activate.js            injects skills/clean-n-code/SKILL.md as session context (CLEAN_N_CODE=off skips it)
+  hooks.json             SessionStart + SubagentStart → activate.js; PreToolUse (Write|Edit|MultiEdit) → block-secrets.js
+  activate.js            injects skills/clean-n-code/SKILL.md as session context, with catalog and languages/ paths made absolute (CLEAN_N_CODE=off skips it)
+  block-secrets.js       exits 2 on secret-shaped values, so Claude Code rejects the write (CLEAN_N_CODE_SECRETS=off skips it)
 skills/
   clean-n-code/          always-on ruleset (≤ 75 lines, enforced by a test)
     references/
       smells.md          C/E/F/G/J/N/T: Clean Code ch. 17 heuristics, with book page numbers
       complexity.md      K1-K8: cyclomatic and cognitive complexity, limits, refactorings, measuring commands
       design.md          D1-D16: modules, architecture, state and paradigms, dependencies, algorithms
-  clean-review/  clean-audit/  clean-refactor/  clean-help/
-tests/                   node --test: hook, catalogs, skills, manifest
+      security.md        S1-S25: Saltzer & Schroeder principles, secrets and API keys, input, access control, crypto, failure, supply chain, memory
+  clean-review/  clean-secure/  clean-audit/  clean-refactor/  clean-help/
+languages/               one guide per language, ≤ 80 lines, citable codes: python.md (PY) javascript.md (JS)
+                         typescript.md (TS) java.md (JA) csharp.md (CS) cpp.md (CP) go.md (GO) php.md (PH)
+                         sql.md (SQ) bash.md (SH) c.md (CL) rust.md (RS)
+scripts/ab.js            A/B runner: same prompt without/with the plugin, isolated, diffed (npm run ab)
+tests/                   node --test: hooks, catalogs, languages, skills, manifest, A/B script
 evals/                   claude plugin eval: behavior cases with LLM graders
 knowledge.md             source notes: the whole book, section by section, page-cited, plus external sources
 ```
 
 - **One source of truth:** the hook reads the same `SKILL.md` that the skill uses, so the rules exist in one file only.
-- **Progressive disclosure:** the always-on context stays small. The three catalogs are loaded only by the review, audit and refactor skills, or when a task needs them.
+- **Progressive disclosure:** the always-on context stays small. The catalogs and language guides are loaded only by the review, audit, security and refactor skills, or when a task needs them (the guide for the language being written).
 - **Measure, don't guess:** complexity is measured with the repo's own linter rule first (ruff `C901`, eslint `complexity`, gocyclo…), then a run-once tool (`uvx lizard`), and only then counted by hand. Results counted by hand are labeled as such. No dependency is ever added to the project just to measure.
-- **Sources:** *Clean Code* (Martin, 2009); NIST SP 500-235 (McCabe's limit of 10); SonarSource's *Cognitive Complexity*; Parnas (1972); Martin's *Clean Architecture* post; Cox, *Our Software Dependency Problem*; Pike's rules; Fowler's refactoring catalog. Each source is listed in [`knowledge.md`](knowledge.md) with what was verified.
+- **Sources:** *Clean Code* (Martin, 2009); NIST SP 500-235 (McCabe's limit of 10); SonarSource's *Cognitive Complexity*; Parnas (1972); Martin's *Clean Architecture* post; Cox, *Our Software Dependency Problem*; Pike's rules; Fowler's refactoring catalog. Security: Saltzer & Schroeder (1975); OWASP Secrets Management Cheat Sheet; NIST SP 800-63B-4; MITRE/CISA 2025 CWE Top 25; OWASP Top 10:2025; OWASP API Security Top 10:2023; NIST SP 800-218 (SSDF). Languages: PEP 8/20/257 and the Google Python, JavaScript, TypeScript, Java, Shell and C++ style guides; MDN; Node.js security best practices; TypeScript TSConfig reference; Effective Go and Go Code Review Comments; Microsoft Learn C# conventions and Cleary's async best practices; C++ Core Guidelines; SEI CERT C and the Linux kernel coding style; The Rust Book, Rust API Guidelines and the Rustonomicon; PER Coding Style and PHP The Right Way; sqlstyle.guide, Use The Index Luke and the PostgreSQL manual; Wooledge's Bash Pitfalls and ShellCheck. Each catalog and guide lists its sources at the top, and `[secondary]` marks those checked only through summaries.
+
+---
+
+## A/B: See the Difference
+
+Run the same prompt without and with the plugin and get a diff of the two answers:
+
+```bash
+npm run ab -- "Write a Go function LoadConfig(path) that reads a JSON config"
+npm run ab -- --case mode-writes-idiomatic-go     # reuse an eval prompt
+npm run ab -- --prompt-file my-prompt.md --model sonnet --max-turns 10
+```
+
+Both arms run `claude -p` in an empty temp dir with user settings off (`--setting-sources project`), so plugins you installed globally don't leak into either arm. Only the plugin arm gets `--plugin-dir`. The script reads each arm's `init` event and **refuses to compare** if the baseline loaded any plugin or the plugin arm loaded anything besides clean-n-code.
+
+Output goes to `ab-results/<timestamp>/`:
+- `without.md` and `with.md`: both full answers.
+- `without.<ext>` and `with.<ext>`: the first code block of each.
+- `diff.patch`.
+- `summary.md`: cost, turns, code lines, max CC via `uvx lizard`, and rule codes cited.
+
+Real output from `--case mode-writes-idiomatic-go`:
+
+```text
+| | without | with |
+|---|---|---|
+| plugins loaded | none | clean-n-code |
+| mode injected | no | yes |
+| cost USD | 0.0581 | 0.1314 |
+| code lines (non-blank) | 25 | 20 |
+| rule codes cited | — | G25, G30, N1, GO8, GO9, GO10, GO12 |
+```
+
+One run per arm shows the change; it doesn't measure it, because LLM output varies. Use `npm run eval` (3 graded runs per arm) to measure.
 
 ---
 
@@ -137,7 +182,8 @@ claude --plugin-dir /path/to/clean-n-code
 ### 4. Turn it off
 
 ```bash
-export CLEAN_N_CODE=off        # skip the session hook
+export CLEAN_N_CODE=off            # skip the session hook (style rules)
+export CLEAN_N_CODE_SECRETS=off    # skip the secret-blocking hook
 ```
 
 You can also say "stop clean-n-code" in a session, or run `/plugin disable clean-n-code`.
@@ -149,19 +195,22 @@ You can also say "stop clean-n-code" in a session, or run `/plugin disable clean
 There are two tiers: fast and offline checks, and slow, paid checks of behavior.
 
 ```bash
-npm test        # 48 unit tests, about 1 s, no network
-npm run eval    # 3 behavior cases × (with plugin, without plugin), about 60 s, about $0.80
+npm test        # 130 unit tests, about 1 s, no network
+npm run eval    # 5 behavior cases × (with plugin, without plugin), about 60 s, about $0.80
 ```
 
 | Suite | What it checks |
 |-------|----------------|
 | `tests/hook.test.js` | Plain-text SessionStart and JSON SubagentStart; frontmatter stripped; catalog paths resolved; `off`/`OFF`/`Off` silences the hook; the context budget. |
+| `tests/secrets-hook.test.js` | Each key format is blocked in Write, Edit and MultiEdit with exit 2; env-var code and test-mode keys pass; `CLEAN_N_CODE_SECRETS=off` disables it, `CLEAN_N_CODE=off` does not; malformed input fails open. Fake keys are built at runtime so the file holds no secret-shaped literal. |
+| `tests/languages.test.js` | One guide per language and nothing else in `languages/`; each defines its prefix's codes 1..n with no gaps (at least 12); the header range matches; it lists sources, stays within 80 lines, and every code it cites exists. |
+| `tests/ab.test.js` | The A/B script's pure parts: stream-json parsing (plugins, mode injection, result), the isolation check, code-block extraction, eval-case loading and argument parsing. It never calls `claude`. |
 | `tests/catalogs.test.js` | Each catalog defines exactly its codes. No duplicates. Every code a skill or catalog cites exists, so a renamed code can't silently break a reference. |
-| `tests/skills.test.js` | Frontmatter matches the folder; relative paths to sibling skills resolve; the report skills promise to change no code; the refactor pins behavior before it edits. |
+| `tests/skills.test.js` | Frontmatter matches the folder; relative paths to sibling skills resolve; the report skills promise to change no code; the refactor pins behavior before it edits; no skill or manifest depends on another plugin by name. |
 | `tests/manifest.test.js` | Plugin and marketplace agree; every hook command points at a script that exists. |
-| `evals/*` | Graded by sonnet. The review measures and flags arrow code but spares a flat dispatch, and finds the quadratic lookup. The review leaves SQL injection out of scope and cites codes. The always-on mode writes flat code with named rules. |
+| `evals/*` | Graded by sonnet. The review measures and flags arrow code but spares a flat dispatch, and finds the quadratic lookup. The review leaves SQL injection out of scope and cites codes. The always-on mode writes flat code with named rules. The mode writes idiomatic Go (wrapped errors with `%w`, `defer Close`, GO codes). The security review finds a hardcoded key (and asks to revoke it), a missing ownership check and SQL injection, each with S codes. |
 
-The unit suite was mutation-checked: 8 deliberate defects (an unknown code cited, a catalog code removed, a broken path, the off switch broken, …) all turn it red. The evals run with and without the plugin: the plugin arm scores 1.00 on all 3 cases, against 0.20-0.50 for the baseline.
+The unit suite was mutation-checked: 8 deliberate defects (an unknown code cited, a catalog code removed, a broken path, the off switch broken, …) all turn it red. The evals run with and without the plugin: the plugin arm scores 1.00 on the 3 readability cases, against 0.20-0.50 for the baseline. The security and Go cases (`secure-finds-authz-and-secret`, `mode-writes-idiomatic-go`) have not been scored yet.
 
 ---
 
@@ -173,6 +222,6 @@ MIT, as declared in `.claude-plugin/plugin.json`. *Clean Code* and the other sou
 
 <div align="center">
 
-**clean-n-code**: Claude Code plugin | Clean Code | complexity | design
+**clean-n-code**: Claude Code plugin | Clean Code | complexity | design | security
 
 </div>
