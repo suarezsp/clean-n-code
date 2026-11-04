@@ -1,0 +1,8 @@
+{
+  "name": "clean-n-code",
+  "version": "0.1.0",
+  "description": "Clean code mode (Robert C. Martin's Clean Code) that reinforces ponytail: names, small functions, why-only comments, errors with context, clean tests. Plus review, audit and refactor skills.",
+  "author": { "name": "Nefer" },
+  "license": "MIT",
+  "hooks": "./hooks/hooks.json"
+}
