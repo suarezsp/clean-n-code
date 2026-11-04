@@ -1,10 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  CATALOG_CODES, CATALOG_FILES, skillNames, readSkill, readCatalog, definedCodes, citedCodes,
+  CATALOG_CODES, CATALOG_FILES, LANGUAGE_PREFIXES, skillNames, readSkill, readCatalog, readLanguage, definedCodes, citedCodes,
 } = require('./helpers');
 
-const allDefinedCodes = new Set(CATALOG_FILES.flatMap((file) => definedCodes(readCatalog(file))));
+const allDefinedCodes = new Set([
+  ...CATALOG_FILES.flatMap((file) => definedCodes(readCatalog(file))),
+  ...Object.keys(LANGUAGE_PREFIXES).flatMap((name) => definedCodes(readLanguage(name))),
+]);
 
 for (const [file, expectedCodes] of Object.entries(CATALOG_CODES)) {
   test(`${file} defines exactly its ${expectedCodes.length} codes`, () => {
