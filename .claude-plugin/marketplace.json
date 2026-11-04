@@ -1,12 +1,12 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "clean-n-code",
-  "description": "Clean code skills for Claude Code, a companion to ponytail.",
+  "description": "Clean code and security baseline skills for Claude Code.",
   "owner": { "name": "Nefer" },
   "plugins": [
     {
       "name": "clean-n-code",
-      "description": "Clean code mode plus review, audit and refactor skills.",
+      "description": "Clean code mode plus review, security, audit and refactor skills.",
       "source": "./",
       "category": "productivity"
     }
