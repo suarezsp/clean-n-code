@@ -3,12 +3,12 @@ name: clean-audit
 description: >
   Clean-code audit of a whole repo or folder: the modules that cost the most
   to read and change, ranked, each finding citing its Clean Code heuristic.
-  One-shot report, changes nothing. Complements ponytail-audit, which covers
-  bugs, security and load. Use for "clean code audit", "code smells in this
+  One-shot report, changes nothing. Security is covered by clean-secure.
+  Use for "clean code audit", "code smells in this
   repo", "how readable is this codebase", /clean-audit.
 ---
 
-Audit the code like the developer who just inherited it and must change it every week. Rank by cost to the next reader. Bugs, security and load are `/ponytail-audit`'s job; mention any you see in one line under `Also noticed:`.
+Audit the code like the developer who just inherited it and must change it every week. Rank by cost to the next reader. Bugs, security and load are out of scope (`/clean-secure` covers security); mention any you see in one line under `Also noticed:`.
 
 ## 1. Map first
 
@@ -16,7 +16,8 @@ Audit the code like the developer who just inherited it and must change it every
 - Read the README, the entry points and the tests. Find the repo's conventions (linter and formatter config, style of the core modules). These conventions beat the book.
 - Find the hot spots: the files changed most often (`git log --format= --name-only | sort | uniq -c | sort -rn | head`), the largest files, the core domain. Go deep there instead of reading file by file. Say which parts you did not read.
 - Read the catalogs in `../clean-n-code/references/` (relative to this skill's base directory): `smells.md`, `complexity.md`, `design.md`.
-- Measure control-flow complexity of the hot-spot and core functions as `complexity.md` → "Measure; don't guess" says (repo linter rule first, then a run-once tool, else count by hand and say so).
+- Read the language guide in `../../languages/` for each language the repo touches (`python.md`, `go.md`…); its idioms beat the general catalogs, and the repo's config beats both.
+- Measure control-flow complexity and length of the hot-spot and core functions as `complexity.md` → "Measure; don't guess" says (repo linter rule first, then a run-once tool, else count by hand and say so). Length is K9's count: the function's own lines only, never the imports, types or code around it.
 
 ## 2. Look for
 
@@ -28,8 +29,9 @@ Audit the code like the developer who just inherited it and must change it every
   - a build or test run that needs more than one command (E1, E2);
   - tests that depend on the network, locale or clock (F.I.R.S.T.);
   - ignored or disabled tests (G4, T4);
-  - the most complex functions, ranked by measured CC and nesting times how often the file changes (K1, K2);
+  - the most complex functions, ranked by measured CC, nesting and own length times how often the file changes (K1, K2, K9);
   - decisions leaking across modules, dependencies pointing outward, framework code inside the domain (D1, D5, D6);
+  - code that fights the language's idioms across many files (codes from its guide in `../../languages/`);
   - dependencies that fail the D12 checks (abandoned, a known vulnerability, used for a few lines).
 
 ## 3. Check before you report
@@ -47,7 +49,7 @@ Then list findings under **Must fix**, **Should fix** and **Nice to have**, most
 
 End with:
 - `Verdict:` one line: what to clean first, or `Clean. Nothing to fix.`
-- `Also noticed:` any bug or security issue for `/ponytail-audit`.
+- `Also noticed:` any bug, or security issue for `/clean-secure`.
 - `Not checked:` the parts you did not read.
 
 One-shot report, changes no code.
