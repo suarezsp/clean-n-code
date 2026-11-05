@@ -176,7 +176,9 @@ Opus wins per case:
 - 5–0: new Python function, TS file with validation, 2-file TS feature, code plus tests.
 - 4–1: refactor.
 - 2–2: extending an existing module.
-- 0–5: the Go config loader.
+- 0–5: the Go config loader. After the Go fix below, a 3-run recheck against no plugin gave 1–0 with 2 ties (`ab-results/2026-11-05T15-31-09-521Z`).
+
+**Noise floor.** Two identical copies of the skill scored 17–9 under the Sonnet judge (`ab-results/2026-11-05T11-57-40-905Z`), so a Sonnet margin under about 8 of 35 is noise. Opus split the same identical pairs 5–5 on the 12 it judged. Decisions after that point use the Opus judge. Read the list below with that in mind: the 22–8 Proportion result and the 26–8 total clear the floor, while E3's 12–9 and E6's 11–9 do not.
 
 The plugin costs about 38% more than no plugin. In the feature case, max CC drops from 8 to 5 and nesting from 4 to 1.
 
@@ -186,6 +188,7 @@ How the always-on rules got there, each change judged against the version before
 - Inline idiom lines instead of an extra turn to read the card won 12–9 at 15% less cost.
 - A complexity-feedback hook never fired in 100 runs and was removed.
 - Three targeted fixes tied overall (Opus 14–14), so only the Go fix was kept: don't re-declare code the task gave you, and keep a spec value literal when it appears only in its check and that check's message (Go case 4–0). The rule limiting edits of existing code and the rule keeping side-effect order in refactors showed no gain and were reverted.
+- A second, stricter attempt at limiting edits of existing code (no shared helper with old code) lost 1–4 under Opus on the module case: Opus prefers extracting the shared check, Sonnet prefers the smaller diff. The rule stays as it was. Only the duplicate "no magic numbers (G25)" line in *Structure*, which contradicted the Proportion rule, was deleted.
 
 One run per arm shows the change; it doesn't measure it, because LLM output varies. Use `--runs 5 --judge`, or `npm run eval` for the graded cases.
 
@@ -230,7 +233,7 @@ There are two tiers: fast and offline checks, and slow, paid checks of behavior.
 
 ```bash
 npm test        # 179 unit tests, about 1 s, no network
-npm run eval    # the 10 cases tagged `graded` × (with plugin, without plugin), about $1.50
+npm run eval    # the 10 cases tagged `graded` × (with plugin, without plugin), 1 run, about $2.70
 ```
 
 | Suite | What it checks |
@@ -245,7 +248,27 @@ npm run eval    # the 10 cases tagged `graded` × (with plugin, without plugin),
 | `tests/manifest.test.js` | Plugin and marketplace agree; every hook command points at a script that exists. |
 | `evals/*` | Graded by sonnet. The review measures and flags arrow code but spares a flat dispatch, and finds the quadratic lookup. The review leaves SQL injection out of scope and cites codes. The always-on mode writes flat code with named rules. The mode writes idiomatic Go (wrapped errors with `%w`, `defer Close`, GO codes). The security review finds a hardcoded key (and asks to revoke it), a missing ownership check and SQL injection, each with S codes. The writing cases also grade correctness against the spec, kept idioms (annotations, no `any`), a 2-file feature's structure, and tests that cover each boundary. `mode-extends-existing-module` (repo conventions, touching only what's needed) runs in the A/B only: `claude plugin eval` doesn't document how a scaffold reaches its workspace yet, so it carries no `graded` tag. |
 
-The unit suite was mutation-checked: 8 deliberate defects (an unknown code cited, a catalog code removed, a broken path, the off switch broken, …) all turn it red. The evals run with and without the plugin: the plugin arm scores 1.00 on the 3 readability cases, against 0.20-0.50 for the baseline. The security and Go cases (`secure-finds-authz-and-secret`, `mode-writes-idiomatic-go`) have not been scored yet.
+The unit suite was mutation-checked: 8 deliberate defects (an unknown code cited, a catalog code removed, a broken path, the off switch broken, …) all turn it red.
+
+Latest graded eval, 1 run per arm (2026-11-05):
+
+| Case | with | without |
+|---|---|---|
+| review-mixed-defects | 1.00 | 0.20 |
+| review-stays-in-its-lane | 1.00 | 0.20 |
+| secure-finds-authz-and-secret | 1.00 | 0.00 |
+| review-measures-arrow-code | 0.75 | 0.25 |
+| mode-writes-code-and-tests | 1.00 | 0.67 |
+| mode-writes-flat-code | 0.86 | 0.71 |
+| mode-writes-feature, mode-writes-ts-file, mode-writes-idiomatic-go, refactor-nested-function | 1.00 | 1.00 |
+
+One run per arm is a first signal, not a measurement. Several baseline failures are on format graders (cites codes, names the rules) that it can't pass by design. The outcome graders (correctness, idioms, boundaries) mostly pass in both arms; the A/B judge is what separates them.
+
+Two findings came out of this eval:
+- **Write must be granted.** `claude plugin eval` blocks Write unless it's granted, so `npm run eval` now passes `--allow-tools Write`.
+- **Graders only see the last message.** They don't see files, so the file-writing cases ask the agent to end by printing what it wrote.
+
+Since that run, two graders were narrowed to match the measured rules, without a re-run: `spares-flat-dispatch` failed a review that called `label` a flat dispatch but listed type hints for every function, and `names-the-rules` demanded constants for single-use spec values. `/clean-refactor` and `/clean-audit` still have no eval.
 
 ---
 
