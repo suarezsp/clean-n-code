@@ -23,8 +23,10 @@ function lastAssistantText(transcriptPath) {
 }
 
 // Only the closing line is checked: code blocks above it may legitimately contain C11, T1 and the like.
+// Another skill (ponytail) may add its own closing line after ours, so look for `Applied:` in the last few lines.
 function closingLine(text) {
-  return text.trim().split('\n').filter((l) => l.trim()).at(-1) || '';
+  const tail = text.trim().split('\n').filter((l) => l.trim()).slice(-4);
+  return tail.findLast((l) => /^\W*Applied:/.test(l)) || tail.at(-1) || '';
 }
 
 function main() {

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   parseArgs, loadCase, parseStream, isolationProblems, extractCode, parseLizardCsv, selectCases, armFailure, buildReport,
   metricsOf, median, parseJudge, judgePrompt, combineVerdicts, hookCounts, isUsageLimit, savedCode, savedRuns,
+  armOutput,
 } = require('../scripts/ab');
 
 const stream = (...events) => events.map((e) => JSON.stringify(e)).join('\n');
@@ -216,4 +217,37 @@ test('savedRuns and savedCode read back a finished suite for re-judging', () => 
   assert.deepEqual(savedRuns(suite).map((r) => [r.name, r.runDirs.length]), [['mode-a', 1], ['mode-b', 1]]);
   assert.deepEqual(savedCode(run), ['A', 'B']);
   assert.deepEqual(savedCode(filesRun), ['', '// file: x.ts\nX']);
+});
+
+test('combineVerdicts takes reasons from the order whose letters match the report (A = without)', () => {
+  const first = { winner: 'with', reasons: 'A is clearer', correctnessIssue: 'none' };
+  const second = { winner: 'with', reasons: 'B is clearer', correctnessIssue: 'none' };
+  assert.equal(combineVerdicts(first, second).reasons, 'B is clearer');
+  assert.equal(combineVerdicts(first, null).reasons, 'A is clearer');
+});
+
+test('isolationProblems with an extra plugin requires it in both arms and allows nothing else', () => {
+  const opts = { extraPlugin: 'ponytail' };
+  assert.deepEqual(isolationProblems({ plugins: ['ponytail'] }, { plugins: ['clean-n-code', 'ponytail'] }, opts), []);
+  assert.equal(isolationProblems({ plugins: [] }, { plugins: ['clean-n-code', 'ponytail'] }, opts).length, 1);
+  assert.equal(isolationProblems({ plugins: ['ponytail', 'x'] }, { plugins: ['clean-n-code', 'ponytail'] }, opts).length, 1);
+});
+
+test('parseArgs takes --effort, --extra-plugin-dir and --check', () => {
+  const opts = parseArgs(['--suite', '--effort', 'low', '--extra-plugin-dir', 'p']);
+  assert.equal(opts.effort, 'low');
+  assert.ok(require('path').isAbsolute(opts.extraPluginDir));
+  assert.ok(parseArgs(['--check', 'ab-results/x']).check);
+});
+
+test('armOutput prefers written files, else the arm code block file', () => {
+  const fs = require('fs');
+  const p = require('path');
+  const dir = fs.mkdtempSync(p.join(require('os').tmpdir(), 'ab-out-'));
+  fs.writeFileSync(p.join(dir, 'with.py'), 'x = 1\n');
+  fs.writeFileSync(p.join(dir, 'with.md'), 'answer\n');
+  assert.equal(armOutput(dir, 'with'), p.join(dir, 'with.py'));
+  assert.equal(armOutput(dir, 'without'), undefined);
+  fs.mkdirSync(p.join(dir, 'files', 'with'), { recursive: true });
+  assert.equal(armOutput(dir, 'with'), p.join(dir, 'files', 'with'));
 });

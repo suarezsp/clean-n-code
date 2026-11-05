@@ -2,3 +2,5 @@ evals/results/
 node_modules/
 infographics/
 ab-results/
+*.swp
+__pycache__/

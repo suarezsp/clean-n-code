@@ -24,7 +24,8 @@ const USAGE = `Usage:
   npm run ab -- --suite [--cases a,b] [--runs n] [--judge]   (code-writing cases: evals/mode-*, evals/refactor-*)
   npm run ab -- --rejudge <ab-results/ts> --judge-model opus   (judge an existing suite's pairs again)
   npm run ab -- --suite --variant <plugin dir>  (A/B two skill versions: <dir> is arm A, this repo is arm B)
-Options: --model <model> (default sonnet)  --judge-model <model> (default sonnet)  --max-turns <n> (default 10)  --allowed-tools <A,B> (default Read,Glob,Grep,Skill)`;
+  npm run ab -- --check <ab-results/ts>        (run each case's evals/<case>/check.sh on both arms' saved output)
+Options: --model <model> (default sonnet)  --effort <low|medium|high>  --extra-plugin-dir <dir> (loaded in both arms, e.g. ponytail)  --judge-model <model> (default sonnet)  --max-turns <n> (default 10)  --allowed-tools <A,B> (default Read,Glob,Grep,Skill)`;
 const CODE_WRITING_CASE = /^(mode|refactor)-/;
 
 function parseArgs(argv) {
@@ -44,11 +45,14 @@ function parseArgs(argv) {
     else if (flag === '--variant') opts.variant = path.resolve(argv[++i]);
     else if (flag === '--rejudge') opts.rejudge = path.resolve(argv[++i]);
     else if (flag === '--cases') Object.assign(opts, { suite: true, cases: argv[++i].split(',') });
+    else if (flag === '--effort') opts.effort = argv[++i];
+    else if (flag === '--extra-plugin-dir') opts.extraPluginDir = path.resolve(argv[++i]);
+    else if (flag === '--check') opts.check = path.resolve(argv[++i]);
     else rest.push(flag);
   }
   if (rest.length) opts.prompt = rest.join(' ');
   if (opts.caseName) Object.assign(opts, loadCase(opts.caseName));
-  if (!opts.prompt && !opts.suite && !opts.rejudge) throw new Error(USAGE);
+  if (!opts.prompt && !opts.suite && !opts.rejudge && !opts.check) throw new Error(USAGE);
   if (!Number.isInteger(opts.runs) || opts.runs < 1) throw new Error(`--runs must be a whole number of at least 1\n${USAGE}`);
   return opts;
 }
@@ -122,16 +126,24 @@ function sumTokens(modelUsage) {
 }
 
 // The comparison is only fair if each arm loads exactly what it should: nothing or clean-n-code for arm A, clean-n-code for B.
-function isolationProblems(without, withPlugin, { variant = false } = {}) {
+// An --extra-plugin-dir plugin (e.g. ponytail) must load in both arms.
+function isolationProblems(without, withPlugin, { variant = false, extraPlugin = null } = {}) {
   const problems = [];
+  const shared = extraPlugin ? [extraPlugin] : [];
   const check = (label, run, expected) => {
-    if (expected.length && !run.plugins.includes(PLUGIN_NAME)) problems.push(`${label} did not load ${PLUGIN_NAME}`);
+    const missing = expected.filter((name) => !run.plugins.includes(name));
+    if (missing.length) problems.push(`${label} did not load ${missing.join(', ')}`);
     const extra = run.plugins.filter((name) => !expected.includes(name));
     if (extra.length) problems.push(`${label} also loaded: ${extra.join(', ')}`);
   };
-  check(variant ? 'variant arm' : 'baseline arm', without, variant ? [PLUGIN_NAME] : []);
-  check('plugin arm', withPlugin, [PLUGIN_NAME]);
+  check(variant ? 'variant arm' : 'baseline arm', without, [...(variant ? [PLUGIN_NAME] : []), ...shared]);
+  check('plugin arm', withPlugin, [PLUGIN_NAME, ...shared]);
   return problems;
+}
+
+function extraPluginName(opts) {
+  if (!opts.extraPluginDir) return null;
+  return JSON.parse(fs.readFileSync(path.join(opts.extraPluginDir, '.claude-plugin', 'plugin.json'), 'utf8')).name;
 }
 
 // First fenced code block of a markdown answer, or null.
@@ -159,7 +171,9 @@ function runArm(opts, withPlugin) {
     '-p', opts.prompt, '--output-format', 'stream-json', '--verbose', '--setting-sources', 'project',
     '--no-session-persistence', '--max-turns', String(opts.maxTurns), '--allowed-tools', opts.allowedTools.join(','),
     ...(opts.model ? ['--model', opts.model] : []),
+    ...(opts.effort ? ['--effort', opts.effort] : []),
     ...(pluginDir ? ['--plugin-dir', pluginDir] : []),
+    ...(opts.extraPluginDir ? ['--plugin-dir', opts.extraPluginDir] : []),
   ];
   return new Promise((resolve, reject) => {
     const env = { ...process.env, CLEAN_N_CODE_HOOK_LOG: hookLog };
@@ -257,7 +271,7 @@ function summarize({ labels, without, withPlugin, functions, measured, compared,
     return functions[arm].map((f) => `${f.name} ${pick(f)}`).join(', ') || 'no functions';
   };
   const codes = (run) => citedCodes(run.answer).join(', ') || '—';
-  const invalid = (run) => invalidCodes(run.answer.trim().split('\n').at(-1) || '').join(', ') || 'none';
+  const invalid = (run) => invalidCodes(run.answer.trim().split('\n').filter((l) => /^\W*Applied:/.test(l)).at(-1) || '').join(', ') || 'none';
   const tokens = ({ tokens: t }) => `${t.input} in / ${t.cacheRead} cache read / ${t.cacheCreation} cache write / ${t.output} out`;
   const row = (label, a, b) => `| ${label} | ${a} | ${b} |`;
   const fnRow = (label, pick) => row(label, perFunction(0, pick), perFunction(1, pick));
@@ -285,7 +299,7 @@ function summarize({ labels, without, withPlugin, functions, measured, compared,
 // Both arms of one prompt; throws when the comparison would be meaningless.
 async function runPair(opts) {
   const [without, withPlugin] = await Promise.all([runArm(opts, false), runArm(opts, true)]);
-  const problems = isolationProblems(without, withPlugin, { variant: Boolean(opts.variant) });
+  const problems = isolationProblems(without, withPlugin, { variant: Boolean(opts.variant), extraPlugin: extraPluginName(opts) });
   if (problems.length) throw new Error(`A/B is not isolated, refusing to compare:\n- ${problems.join('\n- ')}`);
   const failures = [['without', without], ['with', withPlugin]]
     .map(([arm, run]) => armFailure(run) && `${arm} arm failed: ${armFailure(run)}`).filter(Boolean);
@@ -338,10 +352,11 @@ function parseJudge(event, withFirst) {
 }
 
 // Two verdicts on the same pair (one per order) count only when they agree.
+// Reasons come from the second order, where the judge's A and B match the report's labels (A = without, B = with).
 function combineVerdicts(first, second) {
-  if (!first || !second) return first || second ? { ...(first || second), winner: 'inconsistent' } : null;
+  if (!first || !second) return first || second ? { ...(second || first), winner: 'inconsistent' } : null;
   const winner = first.winner === second.winner ? first.winner : 'inconsistent';
-  return { ...first, winner, orders: [first.winner, second.winner] };
+  return { ...second, winner, orders: [first.winner, second.winner] };
 }
 
 function judgeOnce(opts, code, withFirst) {
@@ -524,11 +539,45 @@ async function rejudge(opts) {
   console.log(fs.readFileSync(out, 'utf8'));
 }
 
+// What one arm left in a finished run: its written files, else its code block file.
+function armOutput(runDir, arm) {
+  const written = armDirs(runDir)[arm];
+  if (fs.existsSync(written)) return written;
+  const file = fs.readdirSync(runDir).find((f) => f.startsWith(`${arm}.`) && !f.endsWith('.md'));
+  return file && path.join(runDir, file);
+}
+
+// Runs evals/<case>/check.sh <arm output> on every saved run; exit 0 means the hidden checks passed.
+function runChecks(suiteDir, labels = ['without', 'with']) {
+  const lines = [`# Hidden checks: ${path.basename(suiteDir)}`, '', `| case | ${labels[0]} | ${labels[1]} |`, '|---|---|---|'];
+  const total = { without: [0, 0], with: [0, 0] };
+  for (const { name, runDirs } of savedRuns(suiteDir)) {
+    const script = path.join(ROOT, 'evals', name, 'check.sh');
+    if (!fs.existsSync(script)) continue;
+    const passed = { without: 0, with: 0 };
+    for (const runDir of runDirs) {
+      for (const arm of ['without', 'with']) {
+        const target = armOutput(runDir, arm);
+        const result = target && spawnSync('bash', [script, target], { encoding: 'utf8', timeout: 120000 });
+        if (result && result.status === 0) passed[arm] += 1;
+        else console.error(`  FAIL ${name} ${path.basename(runDir)} ${arm}: ${(result?.stdout + result?.stderr || 'no output').trim().split('\n').slice(-3).join(' | ')}`);
+      }
+    }
+    for (const arm of ['without', 'with']) total[arm] = [total[arm][0] + passed[arm], total[arm][1] + runDirs.length];
+    lines.push(`| ${name} | ${passed.without}/${runDirs.length} | ${passed.with}/${runDirs.length} |`);
+  }
+  lines.push(`| **total** | ${total.without.join('/')} | ${total.with.join('/')} |`);
+  fs.writeFileSync(path.join(suiteDir, 'check.md'), `${lines.join('\n')}\n`);
+  console.log(lines.join('\n'));
+  return total;
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const dir = path.join(ROOT, 'ab-results', new Date().toISOString().replace(/[:.]/g, '-'));
   console.error(`Model ${opts.model}, max ${opts.maxTurns} turns per arm…`);
   if (opts.rejudge) return rejudge(opts);
+  if (opts.check) return runChecks(opts.check);
   if (opts.suite) return runSuite(opts, dir);
 
   const { without, withPlugin } = await runPair(opts);
@@ -547,4 +596,5 @@ if (require.main === module) {
 module.exports = {
   parseArgs, loadCase, parseStream, isolationProblems, extractCode, parseLizardCsv, selectCases, armFailure, buildReport,
   metricsOf, median, parseJudge, judgePrompt, combineVerdicts, hookCounts, isUsageLimit, savedCode, savedRuns,
+  armOutput, runChecks,
 };

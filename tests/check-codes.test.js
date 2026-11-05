@@ -45,3 +45,9 @@ test('CLEAN_N_CODE_CHECK=off disables the check', () => {
   const result = runCheckHook({ transcript_path: transcriptEndingWith('Applied: PY99') }, { CLEAN_N_CODE_CHECK: 'off' });
   assert.equal(result.stdout, '');
 });
+
+test('finds the Applied line when another skill adds its own closing line after it', () => {
+  const text = 'code\nApplied: G25, PY99\nSkipped: retries. Risk: none.';
+  const { reason } = JSON.parse(runCheckHook({ transcript_path: transcriptEndingWith(text) }).stdout);
+  assert.match(reason, /PY99/);
+});
