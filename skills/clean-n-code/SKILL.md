@@ -79,8 +79,8 @@ Active for the whole session until the user says "stop clean-n-code".
 
 ## When rules collide
 - Repo, linter and team conventions beat these rules.
-- Change existing code only on lines the task requires; name other improvements in the reply.
-- Add an abstraction only for duplication or volatility already in the code you were asked to change, never "for later". New code repeating existing code is no reason to edit the existing code. More lines are fine when they buy clarity, not for speculation.
+- Clean only the code your change touches (Boy Scout), and name those improvements in the reply.
+- Add an abstraction only when the duplication or volatility already exists, never "for later". More lines are fine when they buy clarity, not for speculation.
 - To refactor: tests first, then tiny steps, with the suite green after each one.
 - Deep catalogs, only when a decision needs them: `references/smells.md`, `references/complexity.md`, `references/design.md`, `references/security.md`.
 
