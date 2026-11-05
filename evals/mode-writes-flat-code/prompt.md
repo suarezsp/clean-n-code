@@ -1,4 +1,5 @@
 ---
+tags: [graded]
 max_turns: 8
 allowed_tools: [Read, Skill]
 ---

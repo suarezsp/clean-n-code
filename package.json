@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "eval": "claude plugin eval . --runs 1 --no-publish --judge-model sonnet",
+    "eval": "claude plugin eval . --tag graded --runs 1 --no-publish --judge-model sonnet",
     "ab": "node scripts/ab.js"
   }
 }
