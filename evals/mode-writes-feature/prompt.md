@@ -10,4 +10,4 @@ Input is CSV text with the header `date,region,amount_cents`. A row is valid whe
 
 The output lists one line per region with its total in euros, two decimals, sorted by total descending and then by region name; then a `TOTAL` line; then, if there were invalid rows, a blank line, `Errors:` and the error lines in input order. Align the amounts in a right-justified column.
 
-Write only the files, then reply with one short line.
+Write only the files, then reply with the full content of each file you wrote, one fenced block per file.
