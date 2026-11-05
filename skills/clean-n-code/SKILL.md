@@ -15,6 +15,14 @@ You write code the next reader understands at a glance and an attacker cannot ea
 
 Active for the whole session until the user says "stop clean-n-code".
 
+## Proportion
+- Priorities, in order: do exactly what the task asks, no more and no less; follow the repo's conventions; make it cheap for the next reader. The rules below serve these; a rule that makes this code harder to read here doesn't apply here.
+- Name a number (G25) when it repeats, its meaning isn't obvious where it's used, or it changes on its own schedule. A value from the spec that appears only in its own check, and in that check's message, stays a literal.
+- Don't re-declare code the task gave you; write only what is new.
+- A function already within K1, K2 and K9 stays whole: extract a single-use helper only when it names a real step the reader would look for (G34, K8).
+- Docstrings on public APIs are documentation, not comments: follow the language's convention (PEP 257, godoc, TSDoc, Javadoc).
+- Behavior the task leaves undefined isn't yours to invent: no extra checks, coercions, formats or limits. Pick the plain reading and name the assumption in the closing line.
+
 ## Names
 - Reveal intent: why it exists, what it does, how it is used. If a name needs a comment, rename it (N1).
 - Make name length follow scope: `i` for a three-line loop, precise words for anything wider (N5).
@@ -43,7 +51,7 @@ Active for the whole session until the user says "stop clean-n-code".
 
 ## Structure
 - One reason to change per class; split only when there really are two. No train wrecks like `a.getB().getC()` (G36).
-- Plain data structures for data, objects for behavior, no hybrids (D6). Config lives at the top and is passed down (G35); no magic numbers (G25).
+- Plain data structures for data, objects for behavior, no hybrids (D6). Config lives at the top and is passed down (G35).
 
 ## Complexity & design
 - Cyclomatic complexity ≤ 10 (K1) and nesting ≤ 2 (K2). Lower them for real: guard clauses (K3), named conditions (K4), a lookup table instead of an if-ladder (K5). Never add helpers that only exist to shrink a number (K8).
@@ -52,20 +60,27 @@ Active for the whole session until the user says "stop clean-n-code".
 
 ## Security
 - No secret in code, committed config, logs, URLs or errors (S7). Read secrets at runtime (S8). A leaked key is revoked and rotated, not just deleted (S10).
-- Input from outside the process is untrusted: validate it at the boundary (S12), parameterize queries and commands (S13), encode output for its context (S14).
+- Input from outside the process is untrusted: validate it at the boundary (S12). A boundary is where that input enters (HTTP, CLI args, uploads, network, IPC, deserialization); a function's own parameters aren't one unless the task says that input arrives there. Parameterize queries and commands (S13), encode output for its context (S14).
 - Deny by default (S2). Authenticate every non-public endpoint and authorize per object on the server (S18).
-- Bound every resource (S19). Fail closed: clients get a generic error, logs get the detail without secrets (S21).
+- Bound every resource fed by untrusted input (S19). Fail closed: clients get a generic error, logs get the detail without secrets (S21).
 - Vetted crypto and a CSPRNG for tokens (S20), passwords with a slow salted hash (S11), locked and audited dependencies (S23).
 
 ## Language idioms
 - When a language card is in this context, write from it and cite its codes (`GO9`).
-- Open the full guide in `../../languages/` (`python.md`, `go.md`, `rust.md`…) only when the card doesn't settle a decision, or when the task writes more than one function in a language with no card here. Reviews, audits, refactors and security checks read the guide themselves.
+- No card here for the language you write? A file you write gets its card on the first write. For code you only show in the reply, write from the line below; read the guide in `../../languages/` (`python.md`, `go.md`…) only when it doesn't settle a decision. Reviews, audits, refactors and security checks read the guide themselves.
+  - Python: annotate public APIs, PEP 257 docstrings, `raise … from err`, `with` for resources (PY12, PY9, PY13).
+  - TypeScript: `unknown` not `any`, no `as`/`!` without a check, no floating promises (TS2, TS3, TS13).
+  - JavaScript: `const`, `===`, await or return every promise, `Error` with `{ cause }` (JS3, JS4, JS10, JS9).
+  - Go: handle every error, wrap with context and `%w`, error path first, `defer` right after acquire (GO8, GO9, GO10, GO12).
+  - Java: immutable by default, try-with-resources, `Optional` only for return values (JA4, JA12, JA11).
+  - C#: nullable on, `using` declarations, no `async void` or `.Result` (CS7, CS10, CS11, CS12).
+  - Rust: `Result` and `?` with context, `expect` not `unwrap`, borrow in parameters (RS8, RS9, RS5).
 - The repo's config beats the guide, and on idiom the guide beats the general rules.
 
 ## When rules collide
 - Repo, linter and team conventions beat these rules.
-- Clean only the code your change touches (Boy Scout), and name those improvements in the reply.
-- Add an abstraction only when the duplication or volatility already exists, never "for later". More lines are fine when they buy clarity, not for speculation.
+- Change existing code only on lines the task requires; name other improvements in the reply.
+- Add an abstraction only for duplication or volatility already in the code you were asked to change, never "for later". New code repeating existing code is no reason to edit the existing code. More lines are fine when they buy clarity, not for speculation.
 - To refactor: tests first, then tiny steps, with the suite green after each one.
 - Deep catalogs, only when a decision needs them: `references/smells.md`, `references/complexity.md`, `references/design.md`, `references/security.md`.
 

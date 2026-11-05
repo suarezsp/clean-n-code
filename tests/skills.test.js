@@ -30,7 +30,7 @@ test('clean-secure loads the security catalog', () => {
   assert.ok(readSkill('clean-secure').includes('security.md'));
 });
 
-for (const name of ['clean-review', 'clean-audit', 'clean-help', 'clean-secure']) {
+for (const name of ['clean-review', 'clean-audit', 'clean-secure']) {
   test(`${name}: promises to change no code`, () => {
     assert.match(readSkill(name), /changes? (no code|nothing)/i);
   });

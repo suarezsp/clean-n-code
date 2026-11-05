@@ -26,7 +26,8 @@ const READABILITY_CATALOGS = CATALOG_FILES.filter((file) => file !== 'security.m
 const LANGUAGE_MAX_LINES = 80;
 const REPORT_SKILLS = ['clean-review', 'clean-audit', 'clean-refactor'];
 // Context budgets in characters (lines can be arbitrarily long): the ruleset every session pays, and each language card.
-const ALWAYS_ON_MAX_CHARS = 7500;
+// 8000: the inline idiom lines (E3) replaced a Read turn per chat-only answer, which cost more than these chars.
+const ALWAYS_ON_MAX_CHARS = 8000;
 const CARD_MAX_CHARS = 700;
 
 function codeRange(prefix, count) {
