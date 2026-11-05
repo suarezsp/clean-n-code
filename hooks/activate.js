@@ -4,7 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { LANGUAGES, LANGUAGES_DIR } = require('../lib/codes');
+const { LANGUAGES_DIR, languageOf, cardBlock } = require('../lib/codes');
+const { recordCards } = require('../lib/session');
 
 const READ_ONLY_AGENTS = ['Explore', 'claude-code-guide', 'statusline-setup']; // they never write code
 const CARD_MIN_SHARE = 0.1;
@@ -16,7 +17,10 @@ const event = process.argv[2] || 'SessionStart';
 const payload = readPayload();
 if (event === 'SubagentStart' && READ_ONLY_AGENTS.includes(payload.agent_type)) process.exit(0);
 
-const context = `CLEAN-N-CODE MODE ACTIVE\n\n${rulesetBody()}${languageCards(payload.cwd || process.cwd())}`;
+const languages = detectLanguages(projectFiles(payload.cwd || process.cwd()));
+// A fresh, cleared or compacted context holds exactly these cards; a resumed one still holds the cards sent before.
+if (event === 'SessionStart') recordCards(payload.session_id, languages, { reset: payload.source !== 'resume' });
+const context = `CLEAN-N-CODE MODE ACTIVE\n\n${rulesetBody()}${languageCards(languages)}`;
 // SessionStart takes raw stdout; SubagentStart needs the JSON form or the context is dropped.
 process.stdout.write(event === 'SubagentStart'
   ? JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: context } })
@@ -51,10 +55,9 @@ function projectFiles(cwd) {
 
 // Languages holding at least CARD_MIN_SHARE of the project's source files, most common first.
 function detectLanguages(files) {
-  const languageOf = new Map(Object.entries(LANGUAGES).flatMap(([name, l]) => l.extensions.map((ext) => [ext, name])));
   const counts = {};
   for (const file of files) {
-    const name = languageOf.get(path.extname(file).toLowerCase());
+    const name = languageOf(file);
     if (name) counts[name] = (counts[name] || 0) + 1;
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -64,15 +67,7 @@ function detectLanguages(files) {
     .slice(0, MAX_CARDS);
 }
 
-function cardOf(name) {
-  const guide = fs.readFileSync(path.join(LANGUAGES_DIR, `${name}.md`), 'utf8');
-  const match = guide.match(/\n## Card\n([\s\S]*?)\n## /);
-  return match ? match[1].trim() : '';
-}
-
-function languageCards(cwd) {
-  const languages = detectLanguages(projectFiles(cwd));
+function languageCards(languages) {
   if (!languages.length) return '';
-  const cards = languages.map((name) => `### ${name} (full guide: \`${path.join(LANGUAGES_DIR, `${name}.md`)}\`)\n${cardOf(name)}`);
-  return `\n\n## Language cards (detected in this project)\n${cards.join('\n\n')}`;
+  return `\n\n## Language cards (detected in this project)\n${languages.map(cardBlock).join('\n\n')}`;
 }
