@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PreToolUse hook: blocks Write/Edit/MultiEdit calls that would put a secret-shaped value in a file [S7].
+// PreToolUse hook: blocks Write/Edit/MultiEdit/NotebookEdit/Bash calls that would put a secret-shaped value in a file [S7].
 // shortcut: only prefixed token formats; generic high-entropy secrets need gitleaks/trufflehog in CI.
 
 if ((process.env.CLEAN_N_CODE_SECRETS || '').toLowerCase() === 'off') process.exit(0);
@@ -17,7 +17,7 @@ const SECRET_PATTERNS = {
 
 function writtenText(toolInput) {
   const edits = Array.isArray(toolInput.edits) ? toolInput.edits.map((e) => e.new_string) : [];
-  return [toolInput.content, toolInput.new_string, ...edits].filter((s) => typeof s === 'string').join('\n');
+  return [toolInput.content, toolInput.new_string, toolInput.new_source, toolInput.command, ...edits].filter((s) => typeof s === 'string').join('\n');
 }
 
 function findSecretKind(text) {
@@ -36,9 +36,10 @@ process.stdin.on('end', () => {
   const kind = findSecretKind(writtenText(toolInput));
   if (!kind) process.exit(0);
   process.stderr.write(
-    `clean-n-code blocked this write: secret-shaped value (${kind}) in ${toolInput.file_path || 'the file'}. ` +
+    `clean-n-code blocked this write: secret-shaped value (${kind}) in ${toolInput.file_path || toolInput.notebook_path || 'the command'}. ` +
     'Read secrets at runtime from a secret store or an environment variable, and commit only a placeholder [S7, S8]. ' +
-    'If this key is real and was already shared or committed, revoke and rotate it [S10].\n',
+    'If this key is real and was already shared or committed, revoke and rotate it [S10]. ' +
+    'If it is a false positive, the user can set CLEAN_N_CODE_SECRETS=off.\n',
   );
   process.exit(2);
 });

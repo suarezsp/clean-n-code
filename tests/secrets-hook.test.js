@@ -34,6 +34,23 @@ test('MultiEdit with a secret in any edit is blocked', () => {
   assert.equal(runSecretsHook('MultiEdit', { file_path: 'a.js', edits }).status, 2);
 });
 
+test('a Bash command that would write a secret is blocked and says it was the command', () => {
+  const result = runSecretsHook('Bash', { command: `echo "KEY=${FAKE_SECRETS['AWS access key']}" >> .env` });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /the command/);
+});
+
+test('a Bash command with no secret passes', () => {
+  assert.equal(runSecretsHook('Bash', { command: 'echo "$API_KEY" | wc -c' }).status, 0);
+});
+
+test('NotebookEdit with a secret in new_source is blocked', () => {
+  const input = { notebook_path: 'a.ipynb', new_source: `key = "${FAKE_SECRETS['GitHub token']}"` };
+  const result = runSecretsHook('NotebookEdit', input);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /a\.ipynb/);
+});
+
 test('code that reads the key from the environment passes', () => {
   const result = runSecretsHook('Write', { file_path: 'config.js', content: 'const key = process.env.API_KEY;\n// AKIA... placeholder\n' });
   assert.equal(result.status, 0);
