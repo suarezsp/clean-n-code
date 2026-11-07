@@ -17,7 +17,12 @@ run([
     ("cut at the last dash before 60", slugify("a" * 30 + " " + "b" * 40) == "a" * 30),
     ("hard cut when there is no dash", slugify("a" * 70) == "a" * 60),
     ("exactly 60 is kept", slugify("a" * 60) == "a" * 60),
+    ("no dash left when the cut lands on one", slugify("a" * 59 + " " + "b" * 10) == "a" * 59),
+    ("a dash just past the limit is not used", slugify("a" * 60 + " b") == "a" * 60),
+    ("upper-case accents", slugify("ÑANDÚ") == "nandu"),
+    ("letters with no ASCII form count as other characters", slugify("straße") == "stra-e"),
     ("nothing usable is an error", raises(slugify, "!!! ???")),
     ("empty is an error", raises(slugify, "")),
+    ("only non-ASCII letters is an error", raises(slugify, "日本語")),
     ("its own tests pass", own_tests.returncode == 0),
 ])

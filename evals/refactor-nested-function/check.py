@@ -47,7 +47,10 @@ def observe(fn, orders, inventory, user):
     inventory = copy.deepcopy(inventory)
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
-        returned = fn(copy.deepcopy(orders), inventory, copy.deepcopy(user))
+        try:
+            returned = fn(copy.deepcopy(orders), inventory, copy.deepcopy(user))
+        except Exception as err:  # the original fails part-way, so where it stops is behavior too
+            returned = type(err).__name__
     return returned, inventory, out.getvalue()
 
 
@@ -70,4 +73,18 @@ rng = random.Random(7)
 cases = [random_case(rng) for _ in range(400)]
 cases.append(([{"id": 1, "items": [{"sku": "A", "qty": 1, "price": 5}], "coupon": "SAVE10"}], {"A": 1}, {"active": True}))
 cases.append(([{"id": 1}], {}, {"active": True}))
+vip = {"active": True, "vip": True}
+line = lambda sku, qty, price: {"sku": sku, "qty": qty, "price": price}
+cases += [
+    ([{"id": 1, "items": [line("A", 1, 100)]}], {"A": 1}, vip),  # 100 is not above the discount limit
+    ([{"id": 1, "items": [line("A", 2, 50.5)]}], {"A": 2}, vip),  # the limit applies to the line, not the unit
+    ([{"id": 1, "items": [line("A", 3, 33.33), line("B", 7, 0.07)]}], {"A": 3, "B": 7}, vip),  # rounds once, at the end
+    ([{"id": 1, "items": [line("A", 0, 5)]}], {"A": 0}, {"active": True}),  # zero total is not reported
+    ([{"id": 1, "items": [line("A", 1, 5), {"sku": "A", "qty": 1}]}], {"A": 5}, {"active": True}),  # fails after a decrement
+    ([{"id": 1, "items": [line("A", 1, 5)]}, {"items": [line("A", 1, 5)]}], {"A": 5}, {"active": True}),  # id read only when reported
+    ([{"items": [line("A", 2, 5)]}], {"A": 1}, {"active": True}),  # no id, but nothing to report
+    ([{"id": 1, "items": [line("A", 2, 5), line("A", 2, 5)]}], {"A": 3}, {"active": True}),  # same sku drains stock in order
+    ([{"id": 1, "status": "Cancelled", "items": [line("A", 1, 5)]}], {"A": 1}, {"active": True}),  # status match is exact
+    ([], {}, {}),  # an empty user dict is inactive, not missing
+]
 run([(f"case {i}", observe(refactored, *c) == observe(process, *c)) for i, c in enumerate(cases)])
