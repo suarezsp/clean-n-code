@@ -233,14 +233,36 @@ One run per arm shows the change; it doesn't measure it, because LLM output vari
 - **Claude Code** with plugin support
 - **Node 18+** (for the hook and the tests)
 
-### 2. Install
+### 2. Install (marketplace)
+
+From GitHub, inside Claude Code:
+
+```text
+/plugin marketplace add suarezsp/clean-n-code
+/plugin install clean-n-code@clean-n-code
+```
+
+Or from a local clone:
 
 ```text
 /plugin marketplace add /path/to/clean-n-code
 /plugin install clean-n-code@clean-n-code
 ```
 
-Start a new session. The hook loads the ruleset into every session and every subagent.
+Start a new session (or run `/reload-plugins`). The hook loads the ruleset into every session and every subagent.
+
+To update: `/plugin marketplace update clean-n-code`. To remove: `/plugin uninstall clean-n-code@clean-n-code`.
+
+To enable it for a whole team, add this to the project's `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "clean-n-code": { "source": { "source": "github", "repo": "suarezsp/clean-n-code" } }
+  },
+  "enabledPlugins": { "clean-n-code@clean-n-code": true }
+}
+```
 
 ### 3. Try it once without installing
 
