@@ -2,13 +2,6 @@
 
 Cite codes **K1–K9** in findings. Apply them only to code the task already creates or touches. The task's scope still decides what gets written.
 
-Sources:
-- NIST SP 500-235, *Structured Testing* (Watson & McCabe, 1996), §2.5.
-- SonarSource, *Cognitive Complexity* white paper (G. Ann Campbell, 2023 edition).
-- Fowler, refactoring.com catalog.
-- Martin, *Clean Code* chapter 3, p34 and p66.
-- Google Python Style Guide §3.18 "Function length".
-
 ## The two metrics
 - **Cyclomatic complexity (CC)** counts decision points plus one: every `if`, `else if`, loop, `case`, `catch`, `&&`, `||` and `?:` adds one. CC equals the number of basis-path tests needed to cover the function (NIST §5). Use it to answer "how many tests does this need?".
 - **Cognitive complexity** measures how hard the code is for a human to follow (Campbell). It has three rules:

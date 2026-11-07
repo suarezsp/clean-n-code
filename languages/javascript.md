@@ -2,12 +2,6 @@
 
 Cite codes **JS1–JS16**. The repo's ESLint/Prettier config wins over this file; this file wins over the general catalogs on idiom. For `.ts` files, read `typescript.md` too.
 
-Sources:
-- MDN Web Docs: *Using promises*, *Strict mode*, *Equality comparisons*, *JavaScript modules*.
-- Google JavaScript Style Guide (google.github.io/styleguide/jsguide.html), section numbers as cited. Google no longer updates it and recommends TypeScript.
-- Node.js, *Security Best Practices* (nodejs.org/en/learn/getting-started/security-best-practices).
-- ECMAScript specification (tc39.es/ecma262) for semantics.
-
 ## Card
 - `const`/`let`, never `var` (JS3). `===` except `== null` (JS4). Named exports (JS6).
 - Throw `Error` with `{ cause }`; no empty `catch` (JS9).

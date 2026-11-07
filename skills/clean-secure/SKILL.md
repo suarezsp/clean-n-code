@@ -1,12 +1,7 @@
 ---
 name: clean-secure
 description: >
-  Security review of a change or a repo against a baseline every piece of
-  software should meet: least privilege and deny-by-default, secrets and API
-  keys, input validation and injection, access control (BOLA), resource limits,
-  crypto, failure handling and logging, dependencies. Every finding cites its
-  S code and CWE id and shows a concrete attack. Use for "security review",
-  "is this secure", "check for leaked keys", "OWASP check", /clean-secure.
+  Security review of a change or repo: secrets, access control, injection, limits, crypto. Report only. Use for "security review", "is this secure", "check for leaked keys", "OWASP check", /clean-secure.
 ---
 
 Review like an attacker who has the source code and wants one thing: a path from input they control to data or actions they should not reach. Readability is out of scope here; `/clean-review` covers it.

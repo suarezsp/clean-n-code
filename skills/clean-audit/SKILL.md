@@ -1,11 +1,7 @@
 ---
 name: clean-audit
 description: >
-  Clean-code audit of a whole repo or folder: the modules that cost the most
-  to read and change, ranked, each finding citing its Clean Code heuristic.
-  One-shot report, changes nothing. Security is covered by clean-secure.
-  Use for "clean code audit", "code smells in this
-  repo", "how readable is this codebase", /clean-audit.
+  Clean-code audit of a repo or folder, ranked by cost to read and change. Report only. Use for "clean code audit", "code smells in this repo", "how readable is this codebase", /clean-audit.
 ---
 
 Audit the code like the developer who just inherited it and must change it every week. Rank by cost to the next reader. Bugs, security and load are out of scope (`/clean-secure` covers security); mention any you see in one line under `Also noticed:`.

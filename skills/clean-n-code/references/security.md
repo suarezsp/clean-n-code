@@ -4,15 +4,6 @@ Cite codes **S1–S25** in findings, together with the CWE id when one fits (`[S
 
 **Scope guard:** these rules apply to code the task already creates or touches, and to anything on a trust boundary it crosses. They are never cut to keep a diff small, and they never justify a rewrite nobody asked for. A bigger hardening job goes under `Left for later`.
 
-Sources (`[secondary]` means only summaries of the source were checked):
-- Saltzer & Schroeder, *The Protection of Information in Computer Systems*, Proc. IEEE 63(9), 1975, §I.A.3 (web.mit.edu/saltzer/www/publications/protection/).
-- OWASP *Secrets Management Cheat Sheet* (cheatsheetseries.owasp.org), section numbers as cited.
-- NIST SP 800-63B-4, *Authentication and Authenticator Management*, §3.1.1.2 (pages.nist.gov/800-63-4/sp800-63b.html).
-- MITRE / CISA, *2025 CWE Top 25 Most Dangerous Software Weaknesses* (cwe.mitre.org/top25), ranks as cited.
-- OWASP Top 10:2025 (top10.owasp.org) and OWASP API Security Top 10:2023 (api-security.owasp.org).
-- NIST SP 800-218, *Secure Software Development Framework* v1.1 (csrc.nist.gov/projects/ssdf) `[secondary for task wording]`.
-- OWASP ASVS 5.0 (2025) `[secondary]`; CISA/NSA, *Memory Safe Languages* (2025) `[secondary]`.
-
 ## Principles (Saltzer & Schroeder, 1975)
 - **S1 Least privilege.** "Every program and every user of the system should operate using the least set of privileges necessary to complete the job." DB users without DDL, tokens with the narrowest scope, processes not running as root.
 - **S2 Fail-safe defaults.** "Base access decisions on permission rather than exclusion." Deny by default: an allowlist, not a blocklist; a new route is private until someone makes it public.

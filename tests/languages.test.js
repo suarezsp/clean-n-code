@@ -1,8 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
+const path = require('path');
 const {
-  LANGUAGES_DIR, LANGUAGE_PREFIXES, LANGUAGE_MAX_LINES, CARD_MAX_CHARS, CATALOG_FILES, readCatalog, readLanguage, definedCodes, citedCodes,
+  ROOT, LANGUAGES_DIR, LANGUAGE_PREFIXES, LANGUAGE_MAX_LINES, CARD_MAX_CHARS, CATALOG_FILES, readCatalog, readLanguage, definedCodes, citedCodes,
 } = require('./helpers');
 
 const allDefinedCodes = new Set([
@@ -30,7 +31,7 @@ for (const [name, prefix] of Object.entries(LANGUAGE_PREFIXES)) {
   });
 
   test(`${name}.md lists its sources and stays within ${LANGUAGE_MAX_LINES} lines`, () => {
-    assert.match(text, /^Sources:$/m);
+    assert.ok(fs.readFileSync(path.join(ROOT, 'docs', 'sources.md'), 'utf8').includes(`## ${name}.md`), `${name}.md has no sources`);
     assert.ok(text.split('\n').length <= LANGUAGE_MAX_LINES, `${name}.md is too long`);
   });
 

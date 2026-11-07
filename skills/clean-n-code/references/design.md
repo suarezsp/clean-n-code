@@ -4,8 +4,6 @@ Cite codes **D1–D16** in findings.
 
 **Scope guard:** these rules shape code the task already creates or touches. They never justify new layers, modules, frameworks or rewrites nobody asked for; the task's scope wins. If a design problem needs a bigger change, name it under `Left for later`, don't do it.
 
-Sources are listed in `knowledge.md` → "Fuentes externas". `[secondary]` means only summaries of the source were checked.
-
 ## Modules
 - **D1 Hide a decision, not a step.** Parnas (CACM 1972): "begin with a list of difficult design decisions or design decisions which are likely to change. Each module is then designed to hide such a decision from the others." A file format, a protocol, a storage engine or a pricing rule each live behind one module. Don't split modules by processing steps ("read", then "parse", then "save") when all of them know the same format.
 - **D2 Deep modules.** Ousterhout `[secondary]`: the interface is much simpler than what it hides. Shallow modules, whose interface is as big as their body (pass-through wrappers, one-line classes), add cost without hiding anything. So: no wrapper that only passes calls through.

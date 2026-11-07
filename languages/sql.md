@@ -2,12 +2,6 @@
 
 Cite codes **SQ1–SQ14**. These rules apply to SQL files, migrations, and SQL embedded in host-language code. The repo's linter (SQLFluff) and the database vendor's documentation win over this file.
 
-Sources:
-- Holywell, *SQL Style Guide* (sqlstyle.guide, CC BY-SA 4.0), written to be compatible with Celko, *Joe Celko's SQL Programming Style* (2005) `[secondary for Celko]`.
-- OWASP, *Query Parameterization Cheat Sheet*.
-- Winand, *Use The Index, Luke* (use-the-index-luke.com), "Obfuscated Conditions".
-- PostgreSQL documentation, §13.2 "Transaction Isolation".
-
 ## Card
 - `snake_case`, no prefixes; uppercase keywords (SQ2, SQ4).
 - Explicit `JOIN … ON`, no `SELECT *` in app code (SQ5).

@@ -18,9 +18,9 @@ const writeOf = (sessionId, filePath) => ({ session_id: sessionId, tool_name: 'W
 
 test('the first write of a language without a card in context sends its card, once', () => {
   const session = newSession();
-  assert.match(afterWrite(writeOf(session, '/x/app.py')), /### python \(full guide: .*python\.md`\)\n- /);
+  assert.match(afterWrite(writeOf(session, '/x/app.py')), /### python\n- /);
   assert.equal(afterWrite(writeOf(session, '/x/other.py')), '');
-  assert.match(afterWrite(writeOf(session, '/x/main.go')), /### go /);
+  assert.match(afterWrite(writeOf(session, '/x/main.go')), /^### go$/m);
 });
 
 test('no card is sent for a language SessionStart already injected', () => {
@@ -54,9 +54,9 @@ test('a resumed session keeps the cards it was already sent; a compacted one get
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cnc-aw-'));
   const start = (source) => spawnSync('node', [path.join(ROOT, 'hooks', 'activate.js'), 'SessionStart'], { input: JSON.stringify({ cwd: dir, session_id: session, source }) });
   start('startup');
-  assert.match(afterWrite(writeOf(session, '/x/a.rs')), /### rust /);
+  assert.match(afterWrite(writeOf(session, '/x/a.rs')), /^### rust$/m);
   start('resume');
   assert.equal(afterWrite(writeOf(session, '/x/b.rs')), '');
   start('compact');
-  assert.match(afterWrite(writeOf(session, '/x/c.rs')), /### rust /);
+  assert.match(afterWrite(writeOf(session, '/x/c.rs')), /^### rust$/m);
 });

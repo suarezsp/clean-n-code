@@ -2,11 +2,6 @@
 
 Cite codes **TS1–TS14**. TypeScript is JavaScript plus types, so `javascript.md` applies as well; this file adds the type-level rules. The repo's `tsconfig` and ESLint config win.
 
-Sources:
-- TypeScript Handbook and TSConfig reference (typescriptlang.org/tsconfig), `strict` and related flags.
-- Google TypeScript Style Guide (google.github.io/styleguide/tsguide.html), section headings as cited.
-- typescript-eslint rules (typescript-eslint.io), for example `no-floating-promises` in `recommended-type-checked`.
-
 ## Card
 - `strict` on; never weaken tsconfig (TS1). `unknown` not `any` at boundaries (TS2).
 - No `as`/`!` without a check (TS3). No `@ts-ignore` (TS4).

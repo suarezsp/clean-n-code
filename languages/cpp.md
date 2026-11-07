@@ -2,11 +2,6 @@
 
 Cite codes **CP1–CP16**, plus the C++ Core Guidelines rule id where one fits (`[CP4, R.11]`). The repo's `.clang-format`, `.clang-tidy` and standard version win over this file; this file wins over the general catalogs on idiom.
 
-Sources:
-- Stroustrup & Sutter (eds.), *C++ Core Guidelines* (isocpp.github.io/CppCoreGuidelines), rule ids as cited.
-- Google C++ Style Guide (google.github.io/styleguide/cppguide.html) `[secondary]`.
-- Compiler docs: GCC/Clang warning options and sanitizers (`-fsanitize=address,undefined`).
-
 ## Card
 - RAII for every resource (CP3). No naked `new`/`delete`; `make_unique` (CP4).
 - Raw pointers never own (CP5). Rule of zero (CP6).

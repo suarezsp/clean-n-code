@@ -10,6 +10,7 @@ const { recordCards } = require('../lib/session');
 const READ_ONLY_AGENTS = ['Explore', 'claude-code-guide', 'statusline-setup']; // they never write code
 const CARD_MIN_SHARE = 0.1;
 const MAX_CARDS = 3;
+const IDIOM_LABELS = { python: 'Python', typescript: 'TypeScript', javascript: 'JavaScript', go: 'Go', java: 'Java', csharp: 'C#', rust: 'Rust' };
 
 if ((process.env.CLEAN_N_CODE || '').toLowerCase() === 'off') process.exit(0);
 
@@ -20,7 +21,7 @@ if (event === 'SubagentStart' && READ_ONLY_AGENTS.includes(payload.agent_type)) 
 const languages = detectLanguages(projectFiles(payload.cwd || process.cwd()));
 // A fresh, cleared or compacted context holds exactly these cards; a resumed one still holds the cards sent before.
 if (event === 'SessionStart') recordCards(payload.session_id, languages, { reset: payload.source !== 'resume' });
-const context = `CLEAN-N-CODE MODE ACTIVE\n\n${rulesetBody()}${languageCards(languages)}`;
+const context = `CLEAN-N-CODE MODE ACTIVE\n\n${withoutCardedIdioms(rulesetBody(), languages)}${languageCards(languages)}`;
 // SessionStart takes raw stdout; SubagentStart needs the JSON form or the context is dropped.
 process.stdout.write(event === 'SubagentStart'
   ? JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: context } })
@@ -41,6 +42,12 @@ function rulesetBody() {
   return skill.replace(/^---\n[\s\S]*?\n---\n/, '').trim()
     .replace(/`references\//g, `\`${refs}/`)
     .replace(/`\.\.\/\.\.\/languages\//g, `\`${LANGUAGES_DIR}/`);
+}
+
+// A language with its card in context doesn't need its one-line idiom summary too.
+function withoutCardedIdioms(ruleset, languages) {
+  const carded = languages.map((name) => `  - ${IDIOM_LABELS[name]}:`);
+  return ruleset.split('\n').filter((line) => !carded.some((prefix) => line.startsWith(prefix))).join('\n');
 }
 
 function projectFiles(cwd) {

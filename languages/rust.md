@@ -2,12 +2,6 @@
 
 Cite codes **RS1–RS15**, plus the Rust API Guidelines id where one fits (`[RS6, C-CONV]`). The repo's `rustfmt.toml`, `clippy.toml` and lint attributes win over this file; this file wins over the general catalogs on idiom.
 
-Sources:
-- *The Rust Programming Language* (doc.rust-lang.org/book), chapter 9.3 "To panic! or Not to panic!".
-- Rust API Guidelines (rust-lang.github.io/api-guidelines), checklist ids (C-*) as cited.
-- *The Rustonomicon*, "Working with Unsafe" (doc.rust-lang.org/nomicon).
-- Clippy lint list (rust-lang.github.io/rust-clippy) and the Rust Style Guide (rustfmt).
-
 ## Card
 - clippy and rustfmt clean (RS1). `as_`/`to_`/`into_` naming (RS3).
 - Newtypes and enums over bools; private fields (RS4). Borrow in params, no `.clone()` to please the borrow checker (RS5).

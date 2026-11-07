@@ -2,12 +2,6 @@
 
 Cite codes **CL1–CL15**, plus the SEI CERT C rule id where one fits (`[CL5, MEM30-C]`). The repo's style (kernel, GNU, project `.clang-format`) and compiler flags win over this file; this file wins over the general catalogs on idiom.
 
-Sources:
-- SEI CERT C Coding Standard (cmu-sei.github.io/secure-coding-standards/sei-cert-c-coding-standard), rule ids and titles as cited.
-- Linux kernel coding style (kernel.org/doc/html/latest/process/coding-style.html), section numbers as cited.
-- GCC and Clang manuals: warning options, `-fsanitize`, `_FORTIFY_SOURCE`.
-- CISA/NSA, *Memory Safe Languages* (2025) `[secondary]`, see S25.
-
 ## Card
 - Max warnings plus sanitizers (CL1). Small functions, ≤ 3 indent levels (CL3).
 - One owner, one free (CL5). `malloc(sizeof *p)`, `calloc` for arrays (CL6).

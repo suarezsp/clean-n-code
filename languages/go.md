@@ -2,13 +2,6 @@
 
 Cite codes **GO1–GO16**. The repo's `golangci-lint` config wins over this file; this file wins over the general catalogs on idiom.
 
-Sources:
-- *Effective Go* (go.dev/doc/effective_go). Written for Go 1.0 and not updated for generics or modules, but its idioms stand.
-- *Go Code Review Comments* (go.dev/wiki/CodeReviewComments), section headings as cited.
-- Google Go Style Guide (google.github.io/styleguide/go) `[secondary]`.
-- `errors` package docs (pkg.go.dev/errors): `fmt.Errorf("%w")`, `errors.Is`, `errors.As`.
-- Pike, *Go Proverbs* (2015) `[talk]`.
-
 ## Card
 - Every error handled, never `_` (GO8). Wrap with context: `fmt.Errorf("op %s: %w", x, err)`; `errors.Is` (GO9).
 - Error path first, no `else` after `return` (GO10). Libraries don't panic (GO11).

@@ -2,12 +2,6 @@
 
 Cite codes **JA1–JA15**. The repo's Checkstyle, Spotless, Error Prone or IDE config wins over this file; this file wins over the general catalogs on idiom. Clean Code's J1–J3 (`smells.md`) also apply.
 
-Sources:
-- Google Java Style Guide (google.github.io/styleguide/javaguide.html), section numbers as cited.
-- Bloch, *Effective Java*, 3rd ed. (2018), item numbers as cited `[secondary]`.
-- Oracle, *Addressing Deserialization Vulnerabilities* (Java SE 21 docs) and *Secure Coding Guidelines for Java SE* `[secondary]`.
-- SEI CERT Oracle Coding Standard for Java, for example SER12-J.
-
 ## Card
 - Immutable by default: `final`, records, unmodifiable collections (JA4). Composition over inheritance (JA5).
 - Unchecked exceptions for bugs, specific types, values in messages (JA9). Never swallow a caught exception (JA10).

@@ -2,12 +2,6 @@
 
 Cite codes **PY1–PY16**. The repo's formatter, linter and type-checker config win over this file; this file wins over the general catalogs on idiom.
 
-Sources:
-- PEP 8, *Style Guide for Python Code* (peps.python.org/pep-0008), sections as cited.
-- PEP 20, *The Zen of Python*; PEP 257, *Docstring Conventions*; PEP 484 and the `typing` docs.
-- Google Python Style Guide (google.github.io/styleguide/pyguide.html), section numbers as cited.
-- Python docs: `subprocess` → "Security Considerations"; `pickle` → the warning at the top.
-
 ## Card
 - `is None`, implicit truthiness, `isinstance` (PY3). No mutable default args (PY4).
 - Iterate directly; simple comprehensions only (PY5). `with` for every resource (PY13).

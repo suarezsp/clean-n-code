@@ -2,11 +2,6 @@
 
 Cite codes **CS1–CS15**. The repo's `.editorconfig`, analyzers and `Directory.Build.props` win over this file; this file wins over the general catalogs on idiom.
 
-Sources:
-- Microsoft Learn, *.NET Coding Conventions*, *C# identifier naming rules and conventions*, *Nullable reference types* (learn.microsoft.com/dotnet/csharp).
-- Cwalina, Barton & Abrams, *Framework Design Guidelines*, 3rd ed. (Microsoft Learn: standard/design-guidelines) `[secondary]`.
-- Cleary, "Async/Await – Best Practices in Asynchronous Programming", *MSDN Magazine*, March 2013.
-
 ## Card
 - `var` only when the type is obvious (CS3). Records and pattern matching (CS4).
 - Nullable on; `!` sparingly (CS7). Catch specific types; `throw;` not `throw ex;` (CS8).

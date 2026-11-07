@@ -2,11 +2,6 @@
 
 Cite codes **PH1–PH14**. The repo's PHP-CS-Fixer, PHP_CodeSniffer, PHPStan or Psalm config wins over this file; this file wins over the general catalogs on idiom.
 
-Sources:
-- PHP-FIG, *PER Coding Style* 3.0 (php-fig.org/per/coding-style), which "extends, expands and replaces" PSR-12; PSR-1 and PSR-4.
-- *PHP The Right Way* (phptherightway.com), section names as cited.
-- PHP Manual (php.net/manual): PDO prepared statements, `password_hash`, `htmlspecialchars`, error configuration.
-
 ## Card
 - `declare(strict_types=1);` and full types (PH4). Enums, `match`, readonly (PH5).
 - Constructor injection, no service locator (PH6).

@@ -1,12 +1,7 @@
 ---
 name: clean-review
 description: >
-  Clean-code review of a change: names, function size and abstraction levels,
-  comments, error handling style, test hygiene, structure. Every finding
-  cites its Clean Code heuristic (C, E, F, G, N, T codes). Security is
-  covered by clean-secure. Use for "clean
-  review", "readability review", "is this clean code", "code smells in this
-  diff", /clean-review.
+  Readability and design review of a change, citing rule codes. Report only. Use for "clean review", "readability review", "is this clean code", "code smells in this diff", /clean-review.
 ---
 
 Review a change like a careful senior reader who must change this code next month. The question is: how much does this code cost the next person to read and change? Bugs, security holes and load problems are out of scope; `/clean-secure` covers security. If you see one, mention it in a single line under `Also noticed:` and move on.
@@ -16,7 +11,7 @@ Review a change like a careful senior reader who must change this code next mont
 - Review what the user names: uncommitted or staged changes, a branch, a PR, files. If nothing is named, review the uncommitted changes, or the last commit if there are none.
 - Read the diff, then the code around it: callers of changed functions, the functions it calls, and its tests.
 - Find the repo's conventions: linter and formatter config, the style of neighbouring files, naming habits. These conventions beat the book. A finding never asks for something the repo deliberately does differently.
-- Read the catalogs in `../clean-n-code/references/` (relative to this skill's base directory): `smells.md`, `complexity.md`, `design.md`.
+- Read from `../clean-n-code/references/` (relative to this skill's base directory): always `smells.md`; `complexity.md` when a touched function branches, nests or runs long; `design.md` only when the change adds or moves modules, dependencies or data structures.
 - Read the language guide in `../../languages/` for each language the change touches (`python.md`, `go.md`…); its idioms beat the general catalogs, and the repo's config beats both.
 - Measure control-flow complexity and length of the touched functions as `complexity.md` → "Measure; don't guess" says (repo linter rule first, then a run-once tool, else count by hand and say so). Length is K9's count: the function's own lines only, never the imports, types or code around it.
 

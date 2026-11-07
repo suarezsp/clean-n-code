@@ -2,12 +2,6 @@
 
 Cite codes **SH1–SH14**. The repo's `.shellcheckrc` and shell conventions win over this file; this file wins over the general catalogs on idiom.
 
-Sources:
-- Google Shell Style Guide (google.github.io/styleguide/shellguide.html), section headings as cited.
-- ShellCheck (shellcheck.net) and its wiki (SC codes).
-- Wooledge, *Bash Pitfalls* (mywiki.wooledge.org/BashPitfalls), pitfall numbers as cited.
-- GNU Bash Reference Manual.
-
 ## Card
 - Small glue only; ShellCheck clean (SH1, SH2). `main "$@"` and `local` (SH3).
 - Double-quote every expansion; `--` before paths (SH5). Arrays for args, never `eval` (SH6).

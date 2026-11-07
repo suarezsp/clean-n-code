@@ -63,18 +63,24 @@ test('ruleset plus the maximum of three cards stays within budget', () => {
   assert.ok(out.length <= ALWAYS_ON_MAX_CHARS + 3 * (CARD_MAX_CHARS + 200), `context is ${out.length} characters`);
 });
 
+test('a language with its card in context loses its idiom line; the others keep theirs', () => {
+  const out = sessionIn(projectWith(files('.go', 3)));
+  assert.doesNotMatch(out, /^ {2}- Go:/m);
+  assert.match(out, /^ {2}- Python:/m);
+});
+
 test('SessionStart injects the card of each language with at least 10% of source files', () => {
   const out = sessionIn(projectWith([...files('.go', 9), 'tool.py', 'README.md', 'notes.txt']));
-  assert.match(out, /### go \(full guide: /);
+  assert.match(out, /^### go$/m);
   assert.match(out, /GO9/);
-  assert.match(out, /### python /);
-  assert.doesNotMatch(out, /### rust /);
+  assert.match(out, /^### python$/m);
+  assert.doesNotMatch(out, /^### rust$/m);
 });
 
 test('a language under 10% of source files gets no card', () => {
   const out = sessionIn(projectWith([...files('.go', 19), 'tool.py']));
-  assert.match(out, /### go /);
-  assert.doesNotMatch(out, /### python /);
+  assert.match(out, /^### go$/m);
+  assert.doesNotMatch(out, /^### python$/m);
 });
 
 for (const agentType of ['Explore', 'claude-code-guide', 'statusline-setup']) {
