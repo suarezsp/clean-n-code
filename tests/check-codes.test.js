@@ -22,6 +22,17 @@ test('blocks once when the closing line cites a code that does not exist', () =>
   assert.match(reason, /S-validation/);
 });
 
+test('logs each block for the A/B count', () => {
+  const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cnc-cc-')), 'hook.log');
+  runCheckHook({ transcript_path: transcriptEndingWith('Applied: S-validation') }, { CLEAN_N_CODE_HOOK_LOG: log });
+  assert.equal(fs.readFileSync(log, 'utf8'), 'code-block\n');
+});
+
+test('checks an Applied: that ends a paragraph, and not the prose before it', () => {
+  const result = runCheckHook({ transcript_path: transcriptEndingWith('See RFC9110 for details. Applied: S-validation') });
+  assert.match(JSON.parse(result.stdout).reason, /: S-validation\./);
+});
+
 test('passes when every cited code exists', () => {
   assert.equal(runCheckHook({ transcript_path: transcriptEndingWith('code\nApplied: G25, K9, GO9, S12') }).stdout, '');
 });

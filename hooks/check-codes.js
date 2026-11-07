@@ -3,6 +3,7 @@
 // send the turn back once to fix it. Free unless it fires; never blocks twice in a row.
 const fs = require('fs');
 const { invalidCodes } = require('../lib/codes');
+const { logHookEvent } = require('../lib/session');
 
 if ((process.env.CLEAN_N_CODE_CHECK || '').toLowerCase() === 'off') process.exit(0);
 if ((process.env.CLEAN_N_CODE || '').toLowerCase() === 'off') process.exit(0);
@@ -24,9 +25,11 @@ function lastAssistantText(transcriptPath) {
 
 // Only the closing line is checked: code blocks above it may legitimately contain C11, T1 and the like.
 // Another skill (ponytail) may add its own closing line after ours, so look for `Applied:` in the last few lines.
+// Weaker models end a paragraph with it instead of starting a line, so only what follows it counts.
 function closingLine(text) {
   const tail = text.trim().split('\n').filter((l) => l.trim()).slice(-4);
-  return tail.findLast((l) => /^\W*Applied:/.test(l)) || tail.at(-1) || '';
+  const applied = tail.findLast((l) => /\bApplied:/.test(l));
+  return applied ? applied.slice(applied.indexOf('Applied:')) : tail.at(-1) || '';
 }
 
 function main() {
@@ -45,6 +48,7 @@ function main() {
   }
   const invalid = invalidCodes(closingLine(text));
   if (!invalid.length) return;
+  logHookEvent('code-block');
   process.stdout.write(JSON.stringify({
     decision: 'block',
     reason: `clean-n-code: the closing line cites codes that don't exist: ${invalid.join(', ')}. ` +

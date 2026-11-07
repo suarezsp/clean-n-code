@@ -189,9 +189,23 @@ test('parseArgs resolves --variant to an absolute plugin dir', () => {
 test('hookCounts counts the cards the after-write hook logged, and zero when it never fired', () => {
   const fs = require('fs');
   const file = require('path').join(fs.mkdtempSync(require('path').join(require('os').tmpdir(), 'ab-t-')), 'log');
-  assert.deepEqual(hookCounts(file), { cardsSent: 0 });
+  assert.deepEqual(hookCounts(file), { cardsSent: 0, codeBlocks: 0 });
   fs.writeFileSync(file, 'card\ncard\n');
-  assert.deepEqual(hookCounts(file), { cardsSent: 2 });
+  assert.deepEqual(hookCounts(file), { cardsSent: 2, codeBlocks: 0 });
+  fs.appendFileSync(file, 'code-block\n');
+  assert.deepEqual(hookCounts(file), { cardsSent: 2, codeBlocks: 1 });
+});
+
+test('buildReport totals the token kinds, sent-back turns and Applied closings', () => {
+  const pair = {
+    without: { ...arm(1, 10), answer: 'code' },
+    withPlugin: { ...arm(1, 10), codeBlocks: 1, answer: 'code\nApplied: G5' },
+    summary: '', patch: '', metrics: [null, null],
+  };
+  const report = buildReport([{ name: 'mode-a', runs: [pair] }]);
+  assert.match(report, /\| cache write tokens \| 0 \| 0 \|/);
+  assert.match(report, /\| turns sent back for invalid codes \| 0 \| 1 \|/);
+  assert.match(report, /\| replies closing with Applied \| 0 \| 1 \|/);
 });
 
 test('isUsageLimit recognises the limit reply so the suite can stop', () => {
@@ -214,6 +228,8 @@ test('savedRuns and savedCode read back a finished suite for re-judging', () => 
   fs.mkdirSync(p.join(filesRun, 'files', 'with'), { recursive: true });
   fs.writeFileSync(p.join(filesRun, 'prompt.md'), 'task');
   fs.writeFileSync(p.join(filesRun, 'files', 'with', 'x.ts'), 'X');
+  fs.mkdirSync(p.join(filesRun, 'files', 'with', '__pycache__'));
+  fs.writeFileSync(p.join(filesRun, 'files', 'with', '__pycache__', 'x.pyc'), '\0binary');
   assert.deepEqual(savedRuns(suite).map((r) => [r.name, r.runDirs.length]), [['mode-a', 1], ['mode-b', 1]]);
   assert.deepEqual(savedCode(run), ['A', 'B']);
   assert.deepEqual(savedCode(filesRun), ['', '// file: x.ts\nX']);

@@ -27,6 +27,7 @@ const USAGE = `Usage:
   npm run ab -- --check <ab-results/ts>        (run each case's evals/<case>/check.sh on both arms' saved output)
 Options: --model <model> (default sonnet)  --effort <low|medium|high>  --extra-plugin-dir <dir> (loaded in both arms, e.g. ponytail)  --judge-model <model> (default sonnet)  --max-turns <n> (default 10)  --allowed-tools <A,B> (default Read,Glob,Grep,Skill)`;
 const CODE_WRITING_CASE = /^(mode|refactor)-/;
+const CHECK_LEFTOVERS = /(^|\/)(__pycache__|\.pytest_cache)(\/|$)/; // left by --check; the arm didn't write them
 
 function parseArgs(argv) {
   const opts = { maxTurns: 10, allowedTools: ['Read', 'Glob', 'Grep', 'Skill'], model: 'sonnet', judgeModel: 'sonnet', runs: 1 };
@@ -191,11 +192,12 @@ function runArm(opts, withPlugin) {
   });
 }
 
-// How many language cards the after-write hook sent during an arm.
+// What the hooks did during an arm: language cards sent, and turns check-codes sent back.
 function hookCounts(logFile) {
   let lines = [];
   try { lines = fs.readFileSync(logFile, 'utf8').split('\n'); } catch { /* the hook never fired */ }
-  return { cardsSent: lines.filter((l) => l === 'card').length };
+  const count = (entry) => lines.filter((l) => l === entry).length;
+  return { cardsSent: count('card'), codeBlocks: count('code-block') };
 }
 
 // Paths are relative to cwd so diff headers read `a/without.go`, not an absolute path.
@@ -238,7 +240,7 @@ function writeResults(dir, opts, without, withPlugin) {
 // Every file under dir as one text, each preceded by its path, for the judge.
 function readTree(dir) {
   return fs.readdirSync(dir, { recursive: true }).sort()
-    .filter((file) => fs.statSync(path.join(dir, file)).isFile())
+    .filter((file) => !CHECK_LEFTOVERS.test(file) && fs.statSync(path.join(dir, file)).isFile())
     .map((file) => `// file: ${file}\n${fs.readFileSync(path.join(dir, file), 'utf8')}`).join('\n');
 }
 
@@ -264,6 +266,8 @@ function metricsOf(functions) {
   };
 }
 
+const closesWithApplied = (run) => /\bApplied:/.test(run.answer || '');
+
 function summarize({ labels, without, withPlugin, functions, measured, compared, filesDiff }) {
   const perFunction = (arm, pick) => {
     if (!measured[arm]) return '—';
@@ -271,7 +275,7 @@ function summarize({ labels, without, withPlugin, functions, measured, compared,
     return functions[arm].map((f) => `${f.name} ${pick(f)}`).join(', ') || 'no functions';
   };
   const codes = (run) => citedCodes(run.answer).join(', ') || '—';
-  const invalid = (run) => invalidCodes(run.answer.trim().split('\n').filter((l) => /^\W*Applied:/.test(l)).at(-1) || '').join(', ') || 'none';
+  const invalid = (run) => invalidCodes(run.answer.split('Applied:').slice(1).at(-1) || '').join(', ') || 'none';
   const tokens = ({ tokens: t }) => `${t.input} in / ${t.cacheRead} cache read / ${t.cacheCreation} cache write / ${t.output} out`;
   const row = (label, a, b) => `| ${label} | ${a} | ${b} |`;
   const fnRow = (label, pick) => row(label, perFunction(0, pick), perFunction(1, pick));
@@ -288,6 +292,7 @@ function summarize({ labels, without, withPlugin, functions, measured, compared,
     fnRow('cyclomatic complexity (K1)', (f) => f.ccn),
     fnRow('nesting depth (K2)', (f) => f.nesting ?? '?'),
     row('language cards sent after a write', without.cardsSent, withPlugin.cardsSent),
+    row('turns sent back for invalid codes', without.codeBlocks, withPlugin.codeBlocks),
     row('rule codes cited', codes(without), codes(withPlugin)),
     row('invalid codes (closing line)', invalid(without), invalid(withPlugin)),
     '',
@@ -449,9 +454,14 @@ function buildReport(results, labels = ['without', 'with']) {
     '|---|---|---|---|',
     row('cost USD', (run) => run.costUsd, (v) => v.toFixed(4)),
     row('tokens (all)', totalTokens),
+    row('input tokens', (run) => run.tokens.input),
+    row('cache write tokens', (run) => run.tokens.cacheCreation),
+    row('cache read tokens', (run) => run.tokens.cacheRead),
     row('output tokens', (run) => run.tokens.output),
     row('turns', (run) => run.turns),
     row('language cards sent', (run) => run.cardsSent),
+    row('turns sent back for invalid codes', (run) => run.codeBlocks || 0),
+    row('replies closing with Applied', (run) => Number(closesWithApplied(run))),
     '',
     ...results.map((r) => caseSection(r, labels)),
   ].join('\n');
@@ -523,6 +533,7 @@ function savedRuns(suiteDir) {
 async function rejudge(opts) {
   const lines = [`# Re-judged with ${opts.judgeModel}: ${path.basename(opts.rejudge)}`, ''];
   const all = [];
+  const reasons = [];
   for (const { name, runDirs } of savedRuns(opts.rejudge)) {
     console.error(`rejudging ${name} (${runDirs.length} runs)`);
     const verdicts = [];
@@ -532,11 +543,12 @@ async function rejudge(opts) {
     }
     all.push(...verdicts);
     lines.push(`- ${name}: ${tallyText(judgeTally(verdicts), ['without', 'with'])}`);
+    reasons.push(`## ${name}`, ...verdicts.filter((v) => v.judge).map((v, i) => `- run ${i + 1}: **${v.judge.winner}**. ${v.judge.reasons}`), '');
   }
   lines.splice(1, 0, `**Total:** ${tallyText(judgeTally(all), ['without', 'with'])}`);
   const out = path.join(opts.rejudge, `rejudge-${opts.judgeModel}.md`);
-  fs.writeFileSync(out, `${lines.join('\n')}\n`);
-  console.log(fs.readFileSync(out, 'utf8'));
+  fs.writeFileSync(out, `${[...lines, '', ...reasons].join('\n')}\n`);
+  console.log(lines.join('\n'));
 }
 
 // What one arm left in a finished run: its written files, else its code block file.
