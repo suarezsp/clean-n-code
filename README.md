@@ -14,10 +14,10 @@ clean-n-code decides **how code reads**: intent-revealing names, flat functions,
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-D97757?style=for-the-badge&logo=anthropic&logoColor=white)](https://docs.claude.com/en/docs/claude-code)
 [![Node](https://img.shields.io/badge/Node-18+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-192_unit_+_24_evals-2EA44F?style=for-the-badge)](#testing)
+[![Tests](https://img.shields.io/badge/tests-215_unit_+_29_evals-2EA44F?style=for-the-badge)](#testing)
 [![Clean Code](https://img.shields.io/badge/based_on-Clean_Code_(2009)-555555?style=for-the-badge)](skills/clean-n-code/references/)
 
-**MIT** | Claude Code plugin | Skills + SessionStart, secret-blocking and after-write hooks
+**v1.0.0** ([changelog](CHANGELOG.md)) | **MIT** | Claude Code plugin | Skills + SessionStart, SubagentStart, secret-blocking, after-write and Stop hooks
 
 </div>
 
@@ -33,7 +33,7 @@ clean-n-code decides **how code reads**: intent-revealing names, flat functions,
 clean-n-code is a **Claude Code plugin**: one always-on mode, a hook that blocks writing secrets, and four slash-command skills.
 
 - **Always-on mode** writes readable code while the agent works: intent-revealing names, functions at one level of abstraction, cyclomatic complexity of 10 or less, nesting of 2 or less, errors with context, F.I.R.S.T. tests, and a security baseline: no secrets in code, untrusted input validated at the boundary, deny by default, bounded resources, fail closed.
-- **Language guides** in `languages/` cover the 10 most used languages (Stack Overflow Developer Survey 2025) plus C and Rust: Python, JavaScript, TypeScript, Java, C#, C++, Go, PHP, SQL, Bash, C and Rust. Each one is built from the language's own manuals and the engineering literature (PEPs, Effective Go, C++ Core Guidelines, SEI CERT C, Rust API Guidelines, Microsoft Learn, PER Coding Style…), with citable codes (`PY4`, `GO9`, `RS11`). The mode gets each guide's short card for the project's languages at session start, and for any other language the first time it writes a file in it. For code it only shows in the reply, the always-on rules carry one idiom line per common language.
+- **Language guides** in `languages/` cover the 10 most used languages (Stack Overflow Developer Survey 2025) plus C and Rust: Python, JavaScript, TypeScript, Java, C#, C++, Go, PHP, SQL, Bash, C and Rust. Each one is built from the language's own manuals and the engineering literature (PEPs, Effective Go, C++ Core Guidelines, SEI CERT C, Rust API Guidelines, Microsoft Learn, PER Coding Style…), with citable codes (`PY4`, `GO9`, `RS11`). The mode gets each guide's short card at session start for the project's languages (only the most common one, if it holds at least 10% of the source files), and for any other language the first time it writes a file in it. For code it only shows in the reply, the always-on rules carry an idiom line for the project's languages that got no card.
 - **Secret-blocking hook** rejects any Write, Edit, notebook edit or Bash command that would put a known key format (AWS, GitHub, Slack, Stripe, Anthropic, OpenAI, Google, PEM private keys) into a file.
 - **Review, audit, and refactor skills** measure complexity, cite rule codes, and keep fixes inside the existing task scope. Readability is achieved inside the scope, never by adding scope.
 
@@ -102,9 +102,10 @@ hooks/
   after-write.js         after a write: sends the language card the first time a session writes a language whose card isn't
                          in context yet (once per language per session)
   check-codes.js         sends the turn back once if the closing line cites a code that doesn't exist (CLEAN_N_CODE_CHECK=off skips it)
-lib/                     codes.js (rule codes, languages, cards), session.js (cards already in context), lizard.js (A/B metrics)
+lib/                     codes.js (rule codes, languages, cards), session.js (cards already in context), lizard.js (A/B metrics),
+                         check_helpers.py / check-helpers.mjs (shared helpers for evals' hidden checks)
 skills/
-  clean-n-code/          always-on ruleset (≤ 5200 characters as injected, enforced by a test)
+  clean-n-code/          always-on ruleset (≤ 3800 characters as injected, enforced by a test)
     references/
       smells.md          C/E/F/G/J/N/T: Clean Code ch. 17 heuristics, with book page numbers
       complexity.md      K1-K9: cyclomatic and cognitive complexity, limits, refactorings, measuring commands
@@ -115,6 +116,8 @@ languages/               one guide per language, ≤ 80 lines, citable codes: py
                          typescript.md (TS) java.md (JA) csharp.md (CS) cpp.md (CP) go.md (GO) php.md (PH)
                          sql.md (SQ) bash.md (SH) c.md (CL) rust.md (RS)
 scripts/ab.js            A/B runner: same prompt without/with the plugin (or two skill versions), isolated, diffed, blind-judged (npm run ab)
+  ab/                    args.js (flags, case loading), judge.js (blind judge), report.js (report, gate, sign test)
+docs/                    sources.md (every source per catalog and guide), tecnico/knowledge-graph.md (map of the repo)
 tests/                   node --test: hooks, catalogs, languages, skills, manifest, A/B script
 evals/                   behavior cases with LLM graders; `fixture/` holds a starting repo for cases that edit one
 ```
@@ -161,6 +164,7 @@ Output goes to `ab-results/<timestamp>/`:
 
 With `--suite`, each case gets its own folder plus, at the top:
 - `report.md`: totals for both arms (cost, tokens, output tokens, turns, delta %) and the judge's win count, then per case the median function count, total NLOC, max NLOC, max CC and max nesting across runs, each judge verdict, and run 1's summary and with/without diff in a `diff` block. With `--runs n`, runs live in `<case>/run-<i>/`, with a `judge.json` each.
+- In `report.md`, one per-case table (median cost, output tokens, judge wins, hidden checks from each case's `check.sh`) and sign tests across cases. `--gate` makes the suite exit 1 when output tokens rise over 10% without a judge win.
 - `all.patch`: every case's diff in one file, with headers like `a/mode-writes-flat-code/without.py`.
 
 ### Measured results
@@ -180,7 +184,7 @@ Opus wins per case:
 
 **Noise floor.** Two identical copies of the skill scored 17–9 under the Sonnet judge (`ab-results/2026-11-05T11-57-40-905Z`), so a Sonnet margin under about 8 of 35 is noise. Opus split the same identical pairs 5–5 on the 12 it judged. Decisions after that point use the Opus judge. Read the list below with that in mind: the 22–8 Proportion result and the 26–8 total clear the floor, while E3's 12–9 and E6's 11–9 do not.
 
-The plugin costs about 38% more than no plugin. In the feature case, max CC drops from 8 to 5 and nesting from 4 to 1.
+At that point the plugin cost about 38% more than no plugin; v1.0.0 brought that to +12% on Sonnet and +17% on Haiku (see [Token pass for v1.0.0](#token-pass-for-v100-2026-11-19)). In the feature case, max CC drops from 8 to 5 and nesting from 4 to 1.
 
 How the always-on rules got there, each change judged against the version before it:
 - Dropping the `Applied:` closing line lost 7–22, so it stays.
@@ -190,9 +194,29 @@ How the always-on rules got there, each change judged against the version before
 - Three targeted fixes tied overall (Opus 14–14), so only the Go fix was kept: don't re-declare code the task gave you, and keep a spec value literal when it appears only in its check and that check's message (Go case 4–0). The rule limiting edits of existing code and the rule keeping side-effect order in refactors showed no gain and were reverted.
 - A second, stricter attempt at limiting edits of existing code (no shared helper with old code) lost 1–4 under Opus on the module case: Opus prefers extracting the shared check, Sonnet prefers the smaller diff. The rule stays as it was. Only the duplicate "no magic numbers (G25)" line in *Structure*, which contradicted the Proportion rule, was deleted.
 
+### Token pass for v1.0.0 (2026-11-19)
+
+Goal: cost the same tokens as working without the plugin. Plugin vs no plugin, 9 cases × 3 runs, Sonnet judge:
+
+| | Sonnet before | Sonnet v1.0.0 | Haiku before (2026-11-07) | Haiku v1.0.0 |
+|---|---|---|---|---|
+| cost | +29% | **+12%** | +37% | **+17%** |
+| output tokens | +20% | **−1%** | +41% | **+11%** |
+| turns | +25% | **−4%** | +13% | +11% |
+| cache write | +32% | +21% | +35% | +21% |
+| judge (with–without, inconsistent) | 16–4, 6 | 15–6, 6 | 15–7, 5 | 13–5, 9 |
+| hidden checks (with) | 27/27 | 25/27 | 27/27 | 25/27 |
+
+What changed:
+- **No restyle pass after a late card.** The language card that arrives after the first write made the model rewrite the file it had just written: 4 → 6–9 turns in the feature case. The card now says to apply it to what comes next and to edit the written file only for a bug or a security rule. This was the largest saving.
+- **One card at session start**, not up to 3. Other project languages keep their one-line idiom and get their card on first write. Injected context in a 3-language repo: 5505 → 4331 characters.
+- **Shorter ruleset** (≤ 3800 characters, enforced by a test): flow rules merged into functions, security baseline in one paragraph, doc comments only where the repo documents its API, the closing line capped at 5 codes.
+
+The two failed hidden checks are known weak spots that also fail without the plugin in earlier runs (`ß` handling, a refactor that decrements stock before reading a missing price); with 3 runs they are within noise, not proven harmless. What still costs more is the cache write (+21%), the ruleset itself.
+
 ### Token reduction (2026-11-06)
 
-The injected ruleset went from 7826 to about 5090 characters and the five skill descriptions from about 2100 to 1130. Sources moved to `docs/sources.md`, and a language with its card in context drops its idiom line. `/clean-review` and `/clean-refactor` read `design.md` only when the change needs it.
+The injected ruleset went from 7826 to about 5090 characters (and since then to about 4000, not yet measured with the A/B: security baseline cut to codes, idiom lines only for project languages without a card, one reply-length rule) and the five skill descriptions from about 2100 to 1130. Sources moved to `docs/sources.md`, and a language with its card in context drops its idiom line. `/clean-review` and `/clean-refactor` read `design.md` only when the change needs it.
 
 Against the previous version, 9 cases × 5 runs (one run lost to a usage limit), Opus judge: **18–15**, with 8 inconsistent and 2 ties; hidden checks 44/44 vs 42/44. Cost −7%, cache write −10%, output −1%. That means no visible regression, not proven equivalence.
 
@@ -200,7 +224,7 @@ The rule on spec values was reworded after that run, because Haiku read "no sing
 
 Not cut, because the numbers don't justify it:
 - **Output tokens:** almost all of it is the code itself. The `Applied:` line is 1–2% of output, and dropping it lost 7–22.
-- **Language card after a write:** about 200 tokens, roughly 0.6 times per run.
+- **Language card after a write:** about 200 tokens, roughly 0.6 times per run. (v1.0.0 keeps it but stops the restyle pass it caused.)
 - **The rules for the `Plan` subagent:** it plans code, so a test keeps it injected.
 
 ### Low-effort models
@@ -249,7 +273,7 @@ Or from a local clone:
 /plugin install clean-n-code@clean-n-code
 ```
 
-Start a new session (or run `/reload-plugins`). The hook loads the ruleset into every session and every subagent.
+Start a new session (or run `/reload-plugins`). The hook loads the ruleset into every session and into subagents that write or plan code (`general-purpose`, `Plan`, `claude`, `*-coder`, unnamed); other types, such as `Explore`, get nothing.
 
 To update: `/plugin marketplace update clean-n-code`. To remove: `/plugin uninstall clean-n-code@clean-n-code`.
 
@@ -287,9 +311,10 @@ You can also say "stop clean-n-code" in a session, or run `/plugin disable clean
 There are two tiers: fast and offline checks, and slow, paid checks of behavior.
 
 ```bash
-npm test                 # 192 unit tests, about 1 s, no network
-npm run eval             # the 15 cases tagged `graded` × (with plugin, without plugin), 1 run, about $4
-npm run eval:languages   # the 9 `lang-*` cases: one idiom check per language without a code-writing case, about $1.50
+npm test                 # 215 unit tests, about 2 s, no network
+npm run eval             # `eval:graded` then `eval:languages`
+npm run eval:graded      # the 17 cases tagged `graded` × (with plugin, without plugin), 1 run
+npm run eval:languages   # the 12 `lang-*` cases: one idiom check per language without a code-writing case, about $1.50
 ```
 
 | Suite | What it checks |
@@ -303,7 +328,7 @@ npm run eval:languages   # the 9 `lang-*` cases: one idiom check per language wi
 | `tests/catalogs.test.js` | Each catalog defines exactly its codes. No duplicates. Every code a skill or catalog cites exists, so a renamed code can't silently break a reference. |
 | `tests/skills.test.js` | Frontmatter matches the folder; relative paths to sibling skills resolve; the report skills promise to change no code; the refactor pins behavior before it edits; no skill or manifest depends on another plugin by name. |
 | `tests/manifest.test.js` | Plugin and marketplace agree; every hook command points at a script that exists. |
-| `evals/*` | Graded by sonnet. The review measures and flags arrow code but spares a flat dispatch, and finds the quadratic lookup. The review leaves SQL injection out of scope and cites codes. The always-on mode writes flat code with named rules. The mode writes idiomatic Go (wrapped errors with `%w`, `defer Close`, GO codes). The security review finds a hardcoded key (and asks to revoke it), a missing ownership check and SQL injection, each with S codes. The writing cases also grade correctness against the spec, kept idioms (annotations, no `any`), a 2-file feature's structure, and tests that cover each boundary. `mode-extends-existing-module` (repo conventions, touching only what's needed) runs in the A/B only: `claude plugin eval` doesn't document how a scaffold reaches its workspace yet, so it carries no `graded` tag. |
+| `evals/*` | Graded by sonnet. The review measures and flags arrow code but spares a flat dispatch, and finds the quadratic lookup. The review leaves SQL injection out of scope and cites codes. The always-on mode writes flat code with named rules. The mode writes idiomatic Go (wrapped errors with `%w`, `defer Close`, GO codes). The security review finds a hardcoded key (and asks to revoke it), a missing ownership check and SQL injection, each with S codes. The writing cases also grade correctness against the spec, kept idioms (annotations, no `any`), a 2-file feature's structure, and tests that cover each boundary. `mode-extends-existing-module` (repo conventions, touching only what's needed) and `mode-fixes-bug-in-messy-module` carry the `graded` tag, but their `fixture/` still has to be verified to reach the eval workspace: `claude plugin eval` doesn't document how a scaffold gets there. |
 
 The unit suite was mutation-checked: 8 deliberate defects (an unknown code cited, a catalog code removed, a broken path, the off switch broken, …) all turn it red.
 
@@ -322,7 +347,7 @@ Latest graded eval, 1 run per arm (2026-11-05):
 One run per arm is a first signal, not a measurement. Several baseline failures are on format graders (cites codes, names the rules) that it can't pass by design. The outcome graders (correctness, idioms, boundaries) mostly pass in both arms; the A/B judge is what separates them.
 
 Two findings came out of this eval:
-- **Write must be granted.** `claude plugin eval` blocks Write unless it's granted, so `npm run eval` now passes `--allow-tools Write`.
+- **Write must be granted.** `claude plugin eval` blocks Write unless it's granted, so `npm run eval:graded` passes `--allow-tools Write Edit`.
 - **Graders only see the last message.** They don't see files, so the file-writing cases ask the agent to end by printing what it wrote.
 
 Since that run, two graders were narrowed to match the measured rules, without a re-run: `spares-flat-dispatch` failed a review that called `label` a flat dispatch but listed type hints for every function, and `names-the-rules` demanded constants for single-use spec values. Graded on the current version, plugin arm only: the 4 review and 2 security cases scored 1.00 in 2 runs each, both false-positive cases included. `skill-refactor-pins-behavior` scored 1.00 in 1 run after its grader was corrected. `audit-ranks-repo` scored 0.80 in each run, with one grader failing each time; in the last run it flagged the clean `money.py`.
