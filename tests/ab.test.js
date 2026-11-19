@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  parseArgs, loadCase, parseStream, isolationProblems, extractCode, parseLizardCsv, selectCases, armFailure, buildReport,
+  parseArgs, loadCase, parseStream, isolationProblems, extractCode, parseLizardCsv, selectCases, armFailure, buildReport, gateFailure, signTestP,
   metricsOf, median, parseJudge, judgePrompt, combineVerdicts, hookCounts, isUsageLimit, savedCode, savedRuns,
   armOutput,
 } = require('../scripts/ab');
@@ -122,6 +122,40 @@ test('buildReport totals both arms and shows medians, verdicts, run-1 diff and f
   assert.match(report, /## mode-b\n\nFAILED run: with arm failed: limit/);
 });
 
+test('buildReport shows the median output tokens per case with the delta', () => {
+  assert.match(buildReport([{ name: 'mode-a', runs: [okRun(3, null)] }]), /\| output tokens \| 100 \| 200 \(\+100%\) \|/);
+});
+
+test('gateFailure fails on over 10% more output tokens without a judge win', () => {
+  const judged = (winner) => okRun(3, { winner });
+  assert.match(gateFailure([{ name: 'a', runs: [okRun(3, null)] }]), /\+100%/);
+  assert.match(gateFailure([{ name: 'a', runs: [judged('tie')] }]), /without a judge win/);
+  assert.equal(gateFailure([{ name: 'a', runs: [judged('with')] }]), null);
+});
+
+test('gateFailure passes when output tokens stay within 10%', () => {
+  const run = { ...okRun(3, null), withPlugin: arm(0.15, 110) };
+  assert.equal(gateFailure([{ name: 'a', runs: [run] }]), null);
+});
+
+test('signTestP is the exact two-sided sign test and ignores ties', () => {
+  assert.equal(signTestP(0, 0), null);
+  assert.equal(signTestP(5, 0), 0.0625);
+  assert.equal(signTestP(4, 4), 1);
+  assert.equal(signTestP(0, 5), 0.0625);
+  assert.ok(Math.abs(signTestP(7, 1) - 0.0703125) < 1e-9);
+});
+
+test('buildReport adds one per-case table with cost, output, judge and hidden checks, then sign tests', () => {
+  const runs = [okRun(3, { winner: 'with', reasons: 'x', correctnessIssue: 'none' })];
+  const checks = { perCase: { 'mode-a': { without: 1, with: 0, runs: 1 } } };
+  const report = buildReport([{ name: 'mode-a', runs }, { name: 'mode-b', runs }], ['without', 'with'], checks);
+  assert.match(report, /\| mode-a \| 0\.1000 → 0\.1500 \| 100 → 200 \| 1–0 \(with\) \| 1\/1 vs 0\/1 \|/);
+  assert.match(report, /\| mode-b \| .* \| — \|$/m);
+  assert.match(report, /- output tokens: with 0, without 2, tie 0 of 2 cases, sign test p = 0\.500/);
+  assert.match(report, /- judge: with 2, without 0, tie 0 of 2 cases, sign test p = 0\.500/);
+});
+
 test('metricsOf summarises functions and is null when nothing was measured', () => {
   const fns = [{ nloc: 10, ccn: 3, nesting: 2 }, { nloc: 4, ccn: 6, nesting: null }];
   assert.deepEqual(metricsOf(fns), { functions: 2, totalNloc: 14, maxCcn: 6, maxNloc: 10, maxNesting: 2 });
@@ -171,8 +205,8 @@ test('combineVerdicts keeps a winner only when both orders agree', () => {
   const v = (winner) => ({ winner, reasons: 'r', correctnessIssue: 'none' });
   assert.equal(combineVerdicts(v('with'), v('with')).winner, 'with');
   assert.equal(combineVerdicts(v('with'), v('without')).winner, 'inconsistent');
-  assert.equal(combineVerdicts(v('tie'), null).winner, 'inconsistent');
-  assert.equal(combineVerdicts(null, null), null);
+  assert.equal(combineVerdicts(v('tie'), null).winner, 'unparsed');
+  assert.equal(combineVerdicts(null, null).winner, 'unparsed');
 });
 
 test('buildReport uses the arm labels it is given', () => {

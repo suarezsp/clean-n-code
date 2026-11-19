@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 // A/B: runs one prompt through Claude Code without and with the clean-n-code plugin, then diffs the answers.
 // Both arms start in an empty temp dir with user settings off, so no user plugin (ponytail, …) leaks in.
-// shortcut: one run per arm, so the diff illustrates rather than measures; `npm run eval` does 3 graded runs.
+// shortcut: one run per arm, so the diff illustrates rather than measures; `npm run eval` does 1 graded run per case.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const { citedCodes, invalidCodes } = require('../lib/codes');
 const { parseLizardCsv, measureFunctions } = require('../lib/lizard');
+const { parseArgs, loadCase, selectCases } = require('./ab/args');
+const { parseJudge, judgePrompt, combineVerdicts, judgePair } = require('./ab/judge');
+const { buildReport, gateFailure, signTestP, median, judgeTally, tallyText, winnerLabel } = require('./ab/report');
 
 const ROOT = path.join(__dirname, '..');
 const PLUGIN_NAME = 'clean-n-code';
@@ -17,70 +20,7 @@ const FENCE_EXTENSIONS = {
   cs: 'cs', cpp: 'cpp', 'c++': 'cpp', c: 'c', go: 'go', rust: 'rs', rs: 'rs', php: 'php', sql: 'sql',
   bash: 'sh', sh: 'sh', shell: 'sh',
 };
-const USAGE = `Usage:
-  npm run ab -- "<prompt>"
-  npm run ab -- --case <eval case name>        (uses evals/<case>/prompt.md)
-  npm run ab -- --prompt-file <file.md>
-  npm run ab -- --suite [--cases a,b] [--runs n] [--judge]   (code-writing cases: evals/mode-*, evals/refactor-*)
-  npm run ab -- --rejudge <ab-results/ts> --judge-model opus   (judge an existing suite's pairs again)
-  npm run ab -- --suite --variant <plugin dir>  (A/B two skill versions: <dir> is arm A, this repo is arm B)
-  npm run ab -- --check <ab-results/ts>        (run each case's evals/<case>/check.sh on both arms' saved output)
-Options: --model <model> (default sonnet)  --effort <low|medium|high>  --extra-plugin-dir <dir> (loaded in both arms, e.g. ponytail)  --judge-model <model> (default sonnet)  --max-turns <n> (default 10)  --allowed-tools <A,B> (default Read,Glob,Grep,Skill)`;
-const CODE_WRITING_CASE = /^(mode|refactor)-/;
 const CHECK_LEFTOVERS = /(^|\/)(__pycache__|\.pytest_cache)(\/|$)/; // left by --check; the arm didn't write them
-
-function parseArgs(argv) {
-  const opts = { maxTurns: 10, allowedTools: ['Read', 'Glob', 'Grep', 'Skill'], model: 'sonnet', judgeModel: 'sonnet', runs: 1 };
-  const rest = [];
-  for (let i = 0; i < argv.length; i++) {
-    const flag = argv[i];
-    if (flag === '--case') opts.caseName = argv[++i];
-    else if (flag === '--prompt-file') opts.prompt = fs.readFileSync(argv[++i], 'utf8');
-    else if (flag === '--model') opts.model = argv[++i];
-    else if (flag === '--max-turns') opts.maxTurns = Number(argv[++i]);
-    else if (flag === '--allowed-tools') opts.allowedTools = argv[++i].split(',');
-    else if (flag === '--suite') opts.suite = true;
-    else if (flag === '--runs') opts.runs = Number(argv[++i]);
-    else if (flag === '--judge') opts.judge = true;
-    else if (flag === '--judge-model') opts.judgeModel = argv[++i];
-    else if (flag === '--variant') opts.variant = path.resolve(argv[++i]);
-    else if (flag === '--rejudge') opts.rejudge = path.resolve(argv[++i]);
-    else if (flag === '--cases') Object.assign(opts, { suite: true, cases: argv[++i].split(',') });
-    else if (flag === '--effort') opts.effort = argv[++i];
-    else if (flag === '--extra-plugin-dir') opts.extraPluginDir = path.resolve(argv[++i]);
-    else if (flag === '--check') opts.check = path.resolve(argv[++i]);
-    else rest.push(flag);
-  }
-  if (rest.length) opts.prompt = rest.join(' ');
-  if (opts.caseName) Object.assign(opts, loadCase(opts.caseName));
-  if (!opts.prompt && !opts.suite && !opts.rejudge && !opts.check) throw new Error(USAGE);
-  if (!Number.isInteger(opts.runs) || opts.runs < 1) throw new Error(`--runs must be a whole number of at least 1\n${USAGE}`);
-  return opts;
-}
-
-// Reads an eval case prompt and the max_turns / allowed_tools in its frontmatter.
-function loadCase(name) {
-  const caseDir = path.join(ROOT, 'evals', name);
-  const text = fs.readFileSync(path.join(caseDir, 'prompt.md'), 'utf8');
-  const fixtureDir = path.join(caseDir, 'fixture');
-  const [, frontmatter = '', body = text] = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/) || [];
-  const turns = frontmatter.match(/^max_turns:\s*(\d+)/m);
-  const tools = frontmatter.match(/^allowed_tools:\s*\[(.*)\]/m);
-  return {
-    prompt: body.trim(),
-    ...(turns && { maxTurns: Number(turns[1]) }),
-    ...(tools && { allowedTools: tools[1].split(',').map((t) => t.trim()).filter(Boolean) }),
-    ...(fs.existsSync(fixtureDir) && { fixtureDir }),
-  };
-}
-
-// Eval cases that make the agent write code; review/secure cases only produce prose, so they don't diff well.
-function selectCases(names, wanted) {
-  if (!wanted) return names.filter((name) => CODE_WRITING_CASE.test(name)).sort();
-  const unknown = wanted.filter((name) => !names.includes(name));
-  if (unknown.length) throw new Error(`unknown eval case(s): ${unknown.join(', ')}`);
-  return wanted;
-}
 
 // Why an arm can't be compared (usage limit, crash, auth), or null. A limit reply costs nothing and looks like an answer.
 function armFailure(run) {
@@ -95,23 +35,32 @@ function parseStream(streamText) {
     tokens: { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 },
   };
   for (const line of streamText.split('\n')) {
-    let event;
-    try { event = JSON.parse(line); } catch { continue; }
-    if (event.type === 'system' && event.subtype === 'init') {
-      run.plugins = (event.plugins || []).filter((p) => p.path !== 'builtin').map((p) => p.name);
-    }
-    if (event.type === 'system' && event.subtype === 'hook_response' && JSON.stringify(event).includes(MODE_MARKER)) {
-      run.modeInjected = true;
-    }
-    if (event.type === 'result') {
-      Object.assign(run, {
-        answer: event.result || '', costUsd: event.total_cost_usd || 0, turns: event.num_turns || 0,
-        durationMs: event.duration_ms || 0, isError: Boolean(event.is_error),
-        tokens: sumTokens(event.model_usage_since_last_result || event.modelUsage || {}),
-      });
-    }
+    const event = parseJsonLine(line);
+    if (event) applyStreamEvent(run, event);
   }
   return run;
+}
+
+function parseJsonLine(line) {
+  try { return JSON.parse(line); } catch { return null; }
+}
+
+function applyStreamEvent(run, event) {
+  if (event.type === 'result') return applyResultEvent(run, event);
+  if (event.type !== 'system') return;
+  if (event.subtype === 'init') {
+    run.plugins = (event.plugins || []).filter((p) => p.path !== 'builtin').map((p) => p.name);
+  } else if (event.subtype === 'hook_response' && JSON.stringify(event).includes(MODE_MARKER)) {
+    run.modeInjected = true;
+  }
+}
+
+function applyResultEvent(run, event) {
+  Object.assign(run, {
+    answer: event.result || '', costUsd: event.total_cost_usd || 0, turns: event.num_turns || 0,
+    durationMs: event.duration_ms || 0, isError: Boolean(event.is_error),
+    tokens: sumTokens(event.model_usage_since_last_result || event.modelUsage || {}),
+  });
 }
 
 // Token totals across models, to show where an arm's cost comes from.
@@ -167,7 +116,8 @@ function runArm(opts, withPlugin) {
   if (opts.fixtureDir) fs.cpSync(opts.fixtureDir, cwd, { recursive: true });
   const pluginDir = pluginDirOf(opts, withPlugin);
   // Outside cwd, so it never shows up as a file the arm wrote.
-  const hookLog = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ab-hooklog-')), 'after-write.log');
+  const hookLogDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-hooklog-'));
+  const hookLog = path.join(hookLogDir, 'after-write.log');
   const args = [
     '-p', opts.prompt, '--output-format', 'stream-json', '--verbose', '--setting-sources', 'project',
     '--no-session-persistence', '--max-turns', String(opts.maxTurns), '--allowed-tools', opts.allowedTools.join(','),
@@ -183,11 +133,17 @@ function runArm(opts, withPlugin) {
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
-    child.on('error', (err) => reject(new Error(`could not start claude: ${err.message}`)));
+    const discard = () => [cwd, hookLogDir].forEach((dir) => fs.rmSync(dir, { recursive: true, force: true }));
+    child.on('error', (err) => {
+      discard();
+      reject(new Error(`could not start claude: ${err.message}`));
+    });
     child.on('close', (code) => {
       const run = { ...parseStream(stdout), cwd, ...hookCounts(hookLog) };
-      if (code !== 0 && !run.answer) reject(new Error(`claude exited ${code} (${withPlugin ? 'with' : 'without'}): ${stderr.trim()}`));
-      else resolve(run);
+      fs.rmSync(hookLogDir, { recursive: true, force: true });
+      if (code === 0 || run.answer) return resolve(run);
+      discard();
+      reject(new Error(`claude exited ${code} (${withPlugin ? 'with' : 'without'}): ${stderr.trim()}`));
     });
   });
 }
@@ -266,8 +222,6 @@ function metricsOf(functions) {
   };
 }
 
-const closesWithApplied = (run) => /\bApplied:/.test(run.answer || '');
-
 function summarize({ labels, without, withPlugin, functions, measured, compared, filesDiff }) {
   const perFunction = (arm, pick) => {
     if (!measured[arm]) return '—';
@@ -301,175 +255,30 @@ function summarize({ labels, without, withPlugin, functions, measured, compared,
   ].join('\n');
 }
 
-// Both arms of one prompt; throws when the comparison would be meaningless.
+const removeArmDirs = (...runs) => runs.forEach((run) => fs.rmSync(run.cwd, { recursive: true, force: true }));
+
+// Both arms of one prompt; throws when the comparison would be meaningless. The caller removes the arms' temp dirs.
 async function runPair(opts) {
-  const [without, withPlugin] = await Promise.all([runArm(opts, false), runArm(opts, true)]);
+  const settled = await Promise.allSettled([runArm(opts, false), runArm(opts, true)]);
+  const rejected = settled.find((arm) => arm.status === 'rejected');
+  if (rejected) {
+    removeArmDirs(...settled.filter((arm) => arm.status === 'fulfilled').map((arm) => arm.value));
+    throw rejected.reason;
+  }
+  const [without, withPlugin] = settled.map((arm) => arm.value);
   const problems = isolationProblems(without, withPlugin, { variant: Boolean(opts.variant), extraPlugin: extraPluginName(opts) });
-  if (problems.length) throw new Error(`A/B is not isolated, refusing to compare:\n- ${problems.join('\n- ')}`);
   const failures = [['without', without], ['with', withPlugin]]
     .map(([arm, run]) => armFailure(run) && `${arm} arm failed: ${armFailure(run)}`).filter(Boolean);
+  if (problems.length || failures.length) removeArmDirs(without, withPlugin);
+  if (problems.length) throw new Error(`A/B is not isolated, refusing to compare:\n- ${problems.join('\n- ')}`);
   if (failures.length) throw new Error(failures.join('\n'));
   return { without, withPlugin };
-}
-
-const JUDGE_SCHEMA = {
-  type: 'object',
-  properties: {
-    winner: { enum: ['A', 'B', 'tie'] },
-    reasons: { type: 'string' },
-    correctness_issue: { type: 'string' },
-  },
-  required: ['winner', 'reasons', 'correctness_issue'],
-};
-
-// The judge never sees which version had which skill; each pair is judged in both orders to cancel position bias.
-function judgePrompt(task, code, withFirst) {
-  const [a, b] = withFirst ? [code[1], code[0]] : [code[0], code[1]];
-  return `You are a senior engineer who must maintain one of these two answers to the same task. Judge only the code.
-
-Task given to both:
-${task}
-
-Version A:
-\`\`\`
-${a}
-\`\`\`
-
-Version B:
-\`\`\`
-${b}
-\`\`\`
-
-Which version costs the next reader less to understand and change, while doing exactly what the task asks, `
-    + 'no more and no less? Behavior the task did not ask for counts against a version. '
-    + 'In correctness_issue, name any version that breaks the task and how, or write "none". Keep reasons to two sentences.';
-}
-
-// Maps the judge's A/B verdict back to an arm; null when the reply isn't usable.
-function parseJudge(event, withFirst) {
-  let verdict = event.structured_output;
-  if (!verdict) {
-    try { verdict = JSON.parse((event.result || '').match(/\{[\s\S]*\}/)?.[0]); } catch { return null; }
-  }
-  if (!verdict || !['A', 'B', 'tie'].includes(verdict.winner)) return null;
-  const arms = withFirst ? { A: 'with', B: 'without' } : { A: 'without', B: 'with' };
-  return { winner: verdict.winner === 'tie' ? 'tie' : arms[verdict.winner], reasons: verdict.reasons, correctnessIssue: verdict.correctness_issue };
-}
-
-// Two verdicts on the same pair (one per order) count only when they agree.
-// Reasons come from the second order, where the judge's A and B match the report's labels (A = without, B = with).
-function combineVerdicts(first, second) {
-  if (!first || !second) return first || second ? { ...(second || first), winner: 'inconsistent' } : null;
-  const winner = first.winner === second.winner ? first.winner : 'inconsistent';
-  return { ...second, winner, orders: [first.winner, second.winner] };
-}
-
-function judgeOnce(opts, code, withFirst) {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-judge-'));
-  const args = [
-    '-p', judgePrompt(opts.prompt, code, withFirst), '--output-format', 'json', '--setting-sources', 'project',
-    '--no-session-persistence', '--tools', '', '--model', opts.judgeModel, '--json-schema', JSON.stringify(JUDGE_SCHEMA),
-  ];
-  return new Promise((resolve) => {
-    const child = spawn('claude', args, { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
-    let stdout = '';
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.on('error', () => resolve(null));
-    child.on('close', () => {
-      try { resolve(parseJudge(JSON.parse(stdout), withFirst)); } catch { resolve(null); }
-    });
-  });
-}
-
-async function judgePair(opts, code) {
-  if (!code[0] || !code[1]) return null;
-  const [first, second] = await Promise.all([judgeOnce(opts, code, true), judgeOnce(opts, code, false)]);
-  return combineVerdicts(first, second);
-}
-
-const pct = (a, b) => (a ? `${b >= a ? '+' : ''}${(((b - a) / a) * 100).toFixed(0)}%` : '—');
-const totalTokens = ({ tokens: t }) => t.input + t.cacheRead + t.cacheCreation + t.output;
-const median = (values) => {
-  const sorted = values.filter((v) => v !== null && v !== undefined).sort((x, y) => x - y);
-  if (!sorted.length) return '—';
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-};
-const METRICS = [
-  ['functions', 'functions'], ['totalNloc', 'total NLOC'], ['maxNloc', 'max NLOC (K9)'],
-  ['maxCcn', 'max CC (K1)'], ['maxNesting', 'max nesting (K2)'],
-];
-
-function judgeTally(runs) {
-  const verdicts = runs.map((r) => r.judge).filter(Boolean);
-  const count = (winner) => verdicts.filter((v) => v.winner === winner).length;
-  return { with: count('with'), without: count('without'), tie: count('tie'), inconsistent: count('inconsistent'), total: verdicts.length };
-}
-
-const tallyText = (tally, [a, b]) => `${b} ${tally.with}, ${a} ${tally.without}, tie ${tally.tie}, inconsistent ${tally.inconsistent} (of ${tally.total})`;
-const winnerLabel = (winner, [a, b]) => ({ with: b, without: a }[winner] || winner);
-
-function caseSection(result, labels) {
-  const ok = result.runs.filter((r) => !r.failed);
-  const failed = result.runs.filter((r) => r.failed).map((r) => `FAILED run: ${r.failed}`);
-  if (!ok.length) return `## ${result.name}\n\n${failed.join('\n')}\n`;
-  const metricRow = ([key, label]) => {
-    const pick = (arm) => median(ok.map((r) => r.metrics[arm]?.[key]));
-    return `| ${label} | ${pick(0)} | ${pick(1)} |`;
-  };
-  const tally = judgeTally(ok);
-  const verdicts = ok.filter((r) => r.judge).map((r, i) => `- run ${i + 1}: **${winnerLabel(r.judge.winner, labels)}**. ${r.judge.reasons}`
-    + (r.judge.correctnessIssue && r.judge.correctnessIssue !== 'none' ? ` Correctness: ${r.judge.correctnessIssue}` : ''));
-  return [
-    `## ${result.name}`,
-    '',
-    `| median of ${ok.length} run(s) | ${labels[0]} | ${labels[1]} |`,
-    '|---|---|---|',
-    ...METRICS.map(metricRow),
-    ...(tally.total ? [`| judge wins (both orders agree) | ${tally.without} | ${tally.with} |`] : []),
-    '',
-    ...(verdicts.length ? ['Judge:', ...verdicts, ''] : []),
-    ...failed,
-    `Run 1 detail:\n\n${ok[0].summary}`,
-    `\`\`\`diff\n${ok[0].patch.trim() || '(no difference)'}\n\`\`\``,
-    '',
-  ].join('\n');
-}
-
-// One markdown file: totals and judge win rate across cases, then each case's medians, verdicts and run-1 diff.
-function buildReport(results, labels = ['without', 'with']) {
-  const ok = results.flatMap((r) => r.runs.filter((run) => !run.failed));
-  const sum = (arm, pick) => ok.reduce((total, run) => total + pick(run[arm]), 0);
-  const row = (label, pick, format = (v) => v) => {
-    const [a, b] = [sum('without', pick), sum('withPlugin', pick)];
-    return `| ${label} | ${format(a)} | ${format(b)} | ${pct(a, b)} |`;
-  };
-  const tally = judgeTally(ok);
-  const runCount = results.reduce((total, r) => total + r.runs.length, 0);
-  return [
-    `# A/B: ${labels[0]} vs ${labels[1]} (${ok.length}/${runCount} runs compared, ${results.length} cases)`,
-    '',
-    ...(tally.total ? [`**Blind judge:** ${tallyText(tally, labels)}.`, ''] : []),
-    `| total | ${labels[0]} | ${labels[1]} | delta |`,
-    '|---|---|---|---|',
-    row('cost USD', (run) => run.costUsd, (v) => v.toFixed(4)),
-    row('tokens (all)', totalTokens),
-    row('input tokens', (run) => run.tokens.input),
-    row('cache write tokens', (run) => run.tokens.cacheCreation),
-    row('cache read tokens', (run) => run.tokens.cacheRead),
-    row('output tokens', (run) => run.tokens.output),
-    row('turns', (run) => run.turns),
-    row('language cards sent', (run) => run.cardsSent),
-    row('turns sent back for invalid codes', (run) => run.codeBlocks || 0),
-    row('replies closing with Applied', (run) => Number(closesWithApplied(run))),
-    '',
-    ...results.map((r) => caseSection(r, labels)),
-  ].join('\n');
 }
 
 async function runCaseOnce(caseOpts, runDir, suiteDir) {
   const { without, withPlugin } = await runPair(caseOpts);
   const { summary, compared, filesDiff, code, metrics } = writeResults(runDir, caseOpts, without, withPlugin);
+  removeArmDirs(without, withPlugin);
   // Diffed from the suite dir so headers name the case: a/mode-writes-idiomatic-go/without.go.
   const pair = filesDiff ? Object.values(armDirs(runDir)) : compared;
   const patch = gitDiff(suiteDir, ...pair.map((f) => path.relative(suiteDir, f)));
@@ -481,6 +290,23 @@ async function runCaseOnce(caseOpts, runDir, suiteDir) {
 // A usage limit fails every later run too, so the suite stops there and reports what it has.
 const isUsageLimit = (message) => /hit your .*limit|usage limit|rate limit/i.test(message);
 
+// Every run of one case; stops at the first usage limit and says why in `stopped`.
+async function runCase(name, caseOpts, { dir, position, total }) {
+  const runs = [];
+  for (let i = 0; i < caseOpts.runs; i++) {
+    console.error(`[${position}/${total}] ${name}${caseOpts.runs > 1 ? ` run ${i + 1}/${caseOpts.runs}` : ''}`);
+    const runDir = caseOpts.runs > 1 ? path.join(dir, name, `run-${i + 1}`) : path.join(dir, name);
+    try {
+      runs.push(await runCaseOnce(caseOpts, runDir, dir));
+    } catch (err) {
+      console.error(`  ${err.message}`);
+      runs.push({ failed: err.message.replace(/\n/g, '; ') });
+      if (isUsageLimit(err.message)) return { runs, stopped: err.message.split('\n')[0] };
+    }
+  }
+  return { runs, stopped: '' };
+}
+
 async function runSuite(opts, dir) {
   const names = selectCases(fs.readdirSync(path.join(ROOT, 'evals')), opts.cases);
   const results = [];
@@ -488,29 +314,26 @@ async function runSuite(opts, dir) {
   for (const name of names) {
     if (stopped) break;
     const caseOpts = { ...opts, ...loadCase(name) };
-    const runs = [];
-    for (let i = 0; i < opts.runs; i++) {
-      console.error(`[${results.length + 1}/${names.length}] ${name}${opts.runs > 1 ? ` run ${i + 1}/${opts.runs}` : ''}`);
-      const runDir = opts.runs > 1 ? path.join(dir, name, `run-${i + 1}`) : path.join(dir, name);
-      try {
-        runs.push(await runCaseOnce(caseOpts, runDir, dir));
-      } catch (err) {
-        console.error(`  ${err.message}`);
-        runs.push({ failed: err.message.replace(/\n/g, '; ') });
-        if (isUsageLimit(err.message)) {
-          stopped = err.message.split('\n')[0];
-          break;
-        }
-      }
-    }
-    results.push({ name, runs });
+    const outcome = await runCase(name, caseOpts, { dir, position: results.length + 1, total: names.length });
+    stopped = outcome.stopped;
+    results.push({ name, runs: outcome.runs });
   }
   if (stopped) console.error(`Stopped early: ${stopped}`);
+  writeSuiteOutputs(dir, results, opts);
+}
+
+function writeSuiteOutputs(dir, results, opts) {
   const labels = armLabels(opts);
-  fs.writeFileSync(path.join(dir, 'report.md'), buildReport(results, labels));
+  const checks = runChecks(dir, labels);
+  fs.writeFileSync(path.join(dir, 'report.md'), buildReport(results, labels, checks));
   const patches = results.flatMap((r) => r.runs.filter((run) => !run.failed).map((run) => run.patch));
   fs.writeFileSync(path.join(dir, 'all.patch'), patches.join(''));
   console.log(`Report: ${path.relative(process.cwd(), path.join(dir, 'report.md'))}`);
+  const gate = opts.gate && gateFailure(results);
+  if (gate) {
+    console.error(`Gate failed: ${gate}`);
+    process.exitCode = 1;
+  }
 }
 
 // The code pair a finished run left on disk: written files when there are any, else the two code blocks.
@@ -531,6 +354,7 @@ function savedRuns(suiteDir) {
 }
 
 async function rejudge(opts) {
+  const labels = armLabels(opts);
   const lines = [`# Re-judged with ${opts.judgeModel}: ${path.basename(opts.rejudge)}`, ''];
   const all = [];
   const reasons = [];
@@ -542,10 +366,10 @@ async function rejudge(opts) {
       verdicts.push({ judge: await judgePair({ ...opts, prompt }, savedCode(runDir)) });
     }
     all.push(...verdicts);
-    lines.push(`- ${name}: ${tallyText(judgeTally(verdicts), ['without', 'with'])}`);
-    reasons.push(`## ${name}`, ...verdicts.filter((v) => v.judge).map((v, i) => `- run ${i + 1}: **${v.judge.winner}**. ${v.judge.reasons}`), '');
+    lines.push(`- ${name}: ${tallyText(judgeTally(verdicts), labels)}`);
+    reasons.push(`## ${name}`, ...verdicts.filter((v) => v.judge).map((v, i) => `- run ${i + 1}: **${winnerLabel(v.judge.winner, labels)}**. ${v.judge.reasons}`), '');
   }
-  lines.splice(1, 0, `**Total:** ${tallyText(judgeTally(all), ['without', 'with'])}`);
+  lines.splice(1, 0, `**Total:** ${tallyText(judgeTally(all), labels)}`);
   const out = path.join(opts.rejudge, `rejudge-${opts.judgeModel}.md`);
   fs.writeFileSync(out, `${[...lines, '', ...reasons].join('\n')}\n`);
   console.log(lines.join('\n'));
@@ -559,29 +383,35 @@ function armOutput(runDir, arm) {
   return file && path.join(runDir, file);
 }
 
+// Runs one arm's saved output through the case's check script; returns whether it passed.
+function checkArm(script, runDir, arm, name) {
+  const target = armOutput(runDir, arm);
+  const result = target && spawnSync('bash', [script, target], { encoding: 'utf8', timeout: 120000 });
+  if (result && result.status === 0) return true;
+  console.error(`  FAIL ${name} ${path.basename(runDir)} ${arm}: ${(result?.stdout + result?.stderr || 'no output').trim().split('\n').slice(-3).join(' | ')}`);
+  return false;
+}
+
 // Runs evals/<case>/check.sh <arm output> on every saved run; exit 0 means the hidden checks passed.
 function runChecks(suiteDir, labels = ['without', 'with']) {
   const lines = [`# Hidden checks: ${path.basename(suiteDir)}`, '', `| case | ${labels[0]} | ${labels[1]} |`, '|---|---|---|'];
   const total = { without: [0, 0], with: [0, 0] };
+  const perCase = {};
   for (const { name, runDirs } of savedRuns(suiteDir)) {
     const script = path.join(ROOT, 'evals', name, 'check.sh');
     if (!fs.existsSync(script)) continue;
     const passed = { without: 0, with: 0 };
     for (const runDir of runDirs) {
-      for (const arm of ['without', 'with']) {
-        const target = armOutput(runDir, arm);
-        const result = target && spawnSync('bash', [script, target], { encoding: 'utf8', timeout: 120000 });
-        if (result && result.status === 0) passed[arm] += 1;
-        else console.error(`  FAIL ${name} ${path.basename(runDir)} ${arm}: ${(result?.stdout + result?.stderr || 'no output').trim().split('\n').slice(-3).join(' | ')}`);
-      }
+      for (const arm of ['without', 'with']) passed[arm] += checkArm(script, runDir, arm, name) ? 1 : 0;
     }
     for (const arm of ['without', 'with']) total[arm] = [total[arm][0] + passed[arm], total[arm][1] + runDirs.length];
+    perCase[name] = { ...passed, runs: runDirs.length };
     lines.push(`| ${name} | ${passed.without}/${runDirs.length} | ${passed.with}/${runDirs.length} |`);
   }
   lines.push(`| **total** | ${total.without.join('/')} | ${total.with.join('/')} |`);
   fs.writeFileSync(path.join(suiteDir, 'check.md'), `${lines.join('\n')}\n`);
   console.log(lines.join('\n'));
-  return total;
+  return { total, perCase };
 }
 
 async function main() {
@@ -589,11 +419,12 @@ async function main() {
   const dir = path.join(ROOT, 'ab-results', new Date().toISOString().replace(/[:.]/g, '-'));
   console.error(`Model ${opts.model}, max ${opts.maxTurns} turns per arm…`);
   if (opts.rejudge) return rejudge(opts);
-  if (opts.check) return runChecks(opts.check);
+  if (opts.check) return runChecks(opts.check, armLabels(opts));
   if (opts.suite) return runSuite(opts, dir);
 
   const { without, withPlugin } = await runPair(opts);
   const { compared, summary } = writeResults(dir, opts, without, withPlugin);
+  removeArmDirs(without, withPlugin);
   process.stdout.write(gitDiff(dir, ...compared.map((f) => path.basename(f)), ['--color=always']));
   console.log(`\n${summary}\nResults: ${path.relative(process.cwd(), dir)}/`);
 }
@@ -606,7 +437,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  parseArgs, loadCase, parseStream, isolationProblems, extractCode, parseLizardCsv, selectCases, armFailure, buildReport,
+  parseArgs, loadCase, parseStream, isolationProblems, extractCode, parseLizardCsv, selectCases, armFailure, buildReport, gateFailure, signTestP,
   metricsOf, median, parseJudge, judgePrompt, combineVerdicts, hookCounts, isUsageLimit, savedCode, savedRuns,
-  armOutput, runChecks,
+  armOutput,
 };
