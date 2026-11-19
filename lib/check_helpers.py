@@ -13,12 +13,21 @@ def load_module(path, name="solution"):
 
 def only_function(module):
     """The module's single public top-level function; the prompt left its name to the agent."""
-    found = [f for n, f in vars(module).items()
-             if inspect.isfunction(f) and f.__module__ == module.__name__ and not n.startswith("_")]
+    found = _public_functions(module)
     if len(found) != 1:
-        found = [f for f in found if not any(f.__name__ in inspect.getsource(g) for g in found if g is not f)]
+        found = _not_called_by_siblings(found)
     assert len(found) == 1, f"expected one entry function, found {[f.__name__ for f in found]}"
     return found[0]
+
+
+def _public_functions(module):
+    return [f for n, f in vars(module).items()
+            if inspect.isfunction(f) and f.__module__ == module.__name__ and not n.startswith("_")]
+
+
+def _not_called_by_siblings(functions):
+    """Drops the helpers: functions whose name appears in another one's source."""
+    return [f for f in functions if not any(f.__name__ in inspect.getsource(g) for g in functions if g is not f)]
 
 
 def raises(fn, *args):
