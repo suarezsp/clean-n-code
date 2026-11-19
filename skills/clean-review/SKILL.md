@@ -12,7 +12,7 @@ Review a change like a careful senior reader who must change this code next mont
 - Read the diff, then the code around it: callers of changed functions, the functions it calls, and its tests.
 - Find the repo's conventions: linter and formatter config, the style of neighbouring files, naming habits. These conventions beat the book. A finding never asks for something the repo deliberately does differently.
 - Read from `../clean-n-code/references/` (relative to this skill's base directory): always `smells.md`; `complexity.md` when a touched function branches, nests or runs long; `design.md` only when the change adds or moves modules, dependencies or data structures.
-- Read the language guide in `../../languages/` for each language the change touches (`python.md`, `go.md`…); its idioms beat the general catalogs, and the repo's config beats both.
+- For each language the change touches, use the card already in your context and cite its codes; read the full guide in `../../languages/` (`python.md`, `go.md`…) only for a code the card lacks or when no card is in context. Its idioms beat the general catalogs, and the repo's config beats both.
 - Measure control-flow complexity and length of the touched functions as `complexity.md` → "Measure; don't guess" says (repo linter rule first, then a run-once tool, else count by hand and say so). Length is K9's count: the function's own lines only, never the imports, types or code around it.
 
 ## 2. Look for (in this order)

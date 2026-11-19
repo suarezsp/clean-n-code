@@ -1,10 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { ROOT } = require('./helpers');
+const { ROOT, makeTempDir } = require('./helpers');
 
 const SCRIPT = path.join(ROOT, 'hooks', 'after-write.js');
 let sessionCounter = 0;
@@ -25,7 +24,7 @@ test('the first write of a language without a card in context sends its card, on
 
 test('no card is sent for a language SessionStart already injected', () => {
   const session = newSession();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cnc-aw-'));
+  const dir = makeTempDir('cnc-aw-');
   for (const name of ['a.py', 'b.py']) fs.writeFileSync(path.join(dir, name), '');
   spawnSync('node', [path.join(ROOT, 'hooks', 'activate.js'), 'SessionStart'], { input: JSON.stringify({ cwd: dir, session_id: session }) });
   assert.equal(afterWrite(writeOf(session, path.join(dir, 'c.py'))), '');
@@ -44,14 +43,14 @@ test('a malformed payload fails open', () => {
 });
 
 test('CLEAN_N_CODE_HOOK_LOG records each card and nudge the hook sends', () => {
-  const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cnc-aw-')), 'hook.log');
+  const log = path.join(makeTempDir('cnc-aw-'), 'hook.log');
   afterWrite(writeOf(newSession(), '/x/app.ts'), { CLEAN_N_CODE_HOOK_LOG: log });
   assert.equal(fs.readFileSync(log, 'utf8'), 'card\n');
 });
 
 test('a resumed session keeps the cards it was already sent; a compacted one gets them again', () => {
   const session = newSession();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cnc-aw-'));
+  const dir = makeTempDir('cnc-aw-');
   const start = (source) => spawnSync('node', [path.join(ROOT, 'hooks', 'activate.js'), 'SessionStart'], { input: JSON.stringify({ cwd: dir, session_id: session, source }) });
   start('startup');
   assert.match(afterWrite(writeOf(session, '/x/a.rs')), /^### rust$/m);

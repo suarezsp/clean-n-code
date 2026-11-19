@@ -24,6 +24,24 @@ for (const [kind, secret] of Object.entries(FAKE_SECRETS)) {
   });
 }
 
+test('a legacy sk- OpenAI key is blocked as an OpenAI key, not an Anthropic one', () => {
+  const result = runSecretsHook('Write', { file_path: 'c.js', content: `k = "${'sk-' + 'Ab1'.repeat(14)}"` });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /OpenAI API key/);
+});
+
+for (const kind of ['svcacct', 'admin']) {
+  test(`an sk-${kind}- OpenAI key is blocked`, () => {
+    const result = runSecretsHook('Write', { file_path: 'c.js', content: `k = "${'sk-' + kind + '-' + 'y'.repeat(30)}"` });
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /OpenAI API key/);
+  });
+}
+
+test('a short sk- word such as a package name passes', () => {
+  assert.equal(runSecretsHook('Write', { file_path: 'c.js', content: 'import sk-learn-helper' }).status, 0);
+});
+
 test('Edit with a secret in new_string is blocked', () => {
   const result = runSecretsHook('Edit', { file_path: 'a.py', old_string: 'x', new_string: `KEY = "${FAKE_SECRETS['AWS access key']}"` });
   assert.equal(result.status, 2);

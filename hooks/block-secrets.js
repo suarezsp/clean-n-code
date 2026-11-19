@@ -10,7 +10,7 @@ const SECRET_PATTERNS = {
   'Slack token': /\bxox[baprs]-[A-Za-z0-9-]{10,}/,
   'Stripe live key': /\b[sr]k_live_[A-Za-z0-9]{24,}/,
   'Anthropic API key': /\bsk-ant-[A-Za-z0-9_-]{20,}/,
-  'OpenAI API key': /\bsk-proj-[A-Za-z0-9_-]{20,}/,
+  'OpenAI API key': /\bsk-(?:(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{40,})/,
   'Google API key': /\bAIza[0-9A-Za-z_-]{35}\b/,
   'private key': /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/,
 };

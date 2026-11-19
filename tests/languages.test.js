@@ -3,13 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const {
-  ROOT, LANGUAGES_DIR, LANGUAGE_PREFIXES, LANGUAGE_MAX_LINES, CARD_MAX_CHARS, CATALOG_FILES, readCatalog, readLanguage, definedCodes, citedCodes,
+  ROOT, LANGUAGES_DIR, LANGUAGE_PREFIXES, LANGUAGE_MAX_LINES, CARD_MAX_CHARS, readLanguage, definedCodes, allDefinedCodes, citedCodes,
 } = require('./helpers');
 
-const allDefinedCodes = new Set([
-  ...CATALOG_FILES.flatMap((file) => definedCodes(readCatalog(file))),
-  ...Object.keys(LANGUAGE_PREFIXES).flatMap((name) => definedCodes(readLanguage(name))),
-]);
+const knownCodes = allDefinedCodes();
 
 test('languages/ holds exactly one guide per known language', () => {
   const files = fs.readdirSync(LANGUAGES_DIR).filter((f) => f.endsWith('.md')).sort();
@@ -36,7 +33,7 @@ for (const [name, prefix] of Object.entries(LANGUAGE_PREFIXES)) {
   });
 
   test(`every code cited by ${name}.md exists`, () => {
-    assert.deepEqual(citedCodes(text).filter((code) => !allDefinedCodes.has(code)), []);
+    assert.deepEqual(citedCodes(text).filter((code) => !knownCodes.has(code)), []);
   });
 
   test(`${name}.md has a Card within ${CARD_MAX_CHARS} characters citing only its own codes`, () => {

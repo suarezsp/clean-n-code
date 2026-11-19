@@ -21,7 +21,9 @@ function main() {
   if (!language || !payload.session_id || cardsInContext(payload.session_id).includes(language)) return;
   recordCards(payload.session_id, [language]);
   logHookEvent('card');
-  const context = `## Language card (first ${language} file this session)\n${cardBlock(language)}`;
+  // Without the last sentence models re-edit the file they just wrote to match the card: extra turns, same code.
+  const context = `## Language card (first ${language} file this session)\n${cardBlock(language)}\n\n` +
+    'Apply it to what you write next. Edit the file you just wrote only for a bug or a security rule, not for style.';
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: context } }));
 }
 

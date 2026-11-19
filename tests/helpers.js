@@ -1,9 +1,11 @@
 // Test DSL for the plugin: paths, hook runner, skill and catalog readers.
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { after } = require('node:test');
 const { spawnSync } = require('child_process');
 const {
-  ROOT, REFERENCES_DIR, LANGUAGES_DIR, LANGUAGE_PREFIXES, definedCodes, citedCodes, invalidCodes,
+  ROOT, REFERENCES_DIR, LANGUAGES_DIR, LANGUAGE_PREFIXES, definedCodes, allDefinedCodes, citedCodes, invalidCodes,
 } = require('../lib/codes');
 
 const SKILLS_DIR = path.join(ROOT, 'skills');
@@ -26,9 +28,18 @@ const READABILITY_CATALOGS = CATALOG_FILES.filter((file) => file !== 'security.m
 const LANGUAGE_MAX_LINES = 80;
 const REPORT_SKILLS = ['clean-review', 'clean-audit', 'clean-refactor'];
 // Context budgets in characters (lines can be arbitrarily long): the ruleset every session pays, and each language card.
-// 8000: the inline idiom lines (E3) replaced a Read turn per chat-only answer, which cost more than these chars.
-const ALWAYS_ON_MAX_CHARS = 5200;
+// The idiom lines (E3) replaced a Read turn per chat-only answer; only languages in the project without a card keep one.
+const ALWAYS_ON_MAX_CHARS = 3800;
 const CARD_MAX_CHARS = 700;
+
+// A temp dir that is removed when the requiring test file finishes.
+const tempDirs = [];
+after(() => tempDirs.forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })));
+function makeTempDir(prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
 
 function codeRange(prefix, count) {
   return Array.from({ length: count }, (_, i) => `${prefix}${i + 1}`);
@@ -77,5 +88,5 @@ function readJson(relativePath) {
 
 module.exports = {
   ROOT, SKILLS_DIR, REFERENCES_DIR, LANGUAGES_DIR, LANGUAGE_PREFIXES, LANGUAGE_MAX_LINES, CATALOG_CODES, CATALOG_FILES, READABILITY_CATALOGS, REPORT_SKILLS, ALWAYS_ON_MAX_CHARS, CARD_MAX_CHARS,
-  runHook, runCheckHook, runSecretsHook, skillNames, readSkill, frontmatter, readCatalog, readLanguage, definedCodes, citedCodes, invalidCodes, readJson,
+  makeTempDir, runHook, runCheckHook, runSecretsHook, skillNames, readSkill, frontmatter, readCatalog, readLanguage, definedCodes, allDefinedCodes, citedCodes, invalidCodes, readJson,
 };

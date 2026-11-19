@@ -1,12 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const { runCheckHook } = require('./helpers');
+const { runCheckHook, makeTempDir } = require('./helpers');
 
 function transcriptEndingWith(text) {
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cnc-transcript-')), 't.jsonl');
+  const file = path.join(makeTempDir('cnc-transcript-'), 't.jsonl');
   const lines = [
     { type: 'user', message: { content: 'write it' } },
     { type: 'assistant', message: { content: [{ type: 'text', text }] } },
@@ -23,7 +22,7 @@ test('blocks once when the closing line cites a code that does not exist', () =>
 });
 
 test('logs each block for the A/B count', () => {
-  const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cnc-cc-')), 'hook.log');
+  const log = path.join(makeTempDir('cnc-cc-'), 'hook.log');
   runCheckHook({ transcript_path: transcriptEndingWith('Applied: S-validation') }, { CLEAN_N_CODE_HOOK_LOG: log });
   assert.equal(fs.readFileSync(log, 'utf8'), 'code-block\n');
 });
@@ -35,6 +34,16 @@ test('checks an Applied: that ends a paragraph, and not the prose before it', ()
 
 test('passes when every cited code exists', () => {
   assert.equal(runCheckHook({ transcript_path: transcriptEndingWith('code\nApplied: G25, K9, GO9, S12') }).stdout, '');
+});
+
+test('accepts one combined closing line: Applied codes, then Skipped', () => {
+  const text = 'code\nApplied: G25, K9 · Skipped: no tests for the retry path';
+  assert.equal(runCheckHook({ transcript_path: transcriptEndingWith(text) }).stdout, '');
+});
+
+test('blocks a combined closing line whose Applied part cites an invalid code', () => {
+  const text = 'code\nApplied: G25, PY99 · Skipped: no tests for the retry path';
+  assert.match(JSON.parse(runCheckHook({ transcript_path: transcriptEndingWith(text) }).stdout).reason, /PY99/);
 });
 
 test('only the closing line is checked, so code above it may mention C11 or T1', () => {

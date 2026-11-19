@@ -26,6 +26,18 @@ for (const name of REPORT_SKILLS) {
   });
 }
 
+for (const name of ['clean-audit', 'clean-review', 'clean-refactor']) {
+  test(`${name}: uses the language card in context before reading a full guide`, () => {
+    assert.match(readSkill(name), /card already in your context/);
+  });
+}
+
+test('clean-audit loads complexity.md and design.md only when needed', () => {
+  const text = readSkill('clean-audit');
+  assert.match(text, /always `smells\.md`; `complexity\.md` when/);
+  assert.match(text, /`design\.md` only when/);
+});
+
 test('clean-secure loads the security catalog', () => {
   assert.ok(readSkill('clean-secure').includes('security.md'));
 });
@@ -57,6 +69,6 @@ test('no skill or manifest mentions ponytail', () => {
 test('always-on mode writes from cards and cites only codes in context', () => {
   const text = readSkill('clean-n-code');
   assert.doesNotMatch(text, /before writing code in a language, read its guide/i);
-  assert.match(text, /Cite only codes printed in this context/);
+  assert.match(text, /Cite only codes that exist/);
   assert.match(text, /never invent one/);
 });

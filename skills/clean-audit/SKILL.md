@@ -11,8 +11,8 @@ Audit the code like the developer who just inherited it and must change it every
 - Audit what the user names: a folder, a package, or the whole repo. If nothing is named, audit the whole repo.
 - Read the README, the entry points and the tests. Find the repo's conventions (linter and formatter config, style of the core modules). These conventions beat the book.
 - Find the hot spots: the files changed most often (`git log --format= --name-only | sort | uniq -c | sort -rn | head`), the largest files, the core domain. Go deep there instead of reading file by file. Say which parts you did not read.
-- Read the catalogs in `../clean-n-code/references/` (relative to this skill's base directory): `smells.md`, `complexity.md`, `design.md`.
-- Read the language guide in `../../languages/` for each language the repo touches (`python.md`, `go.md`…); its idioms beat the general catalogs, and the repo's config beats both.
+- Read from `../clean-n-code/references/` (relative to this skill's base directory): always `smells.md`; `complexity.md` when a hot-spot function branches, nests or runs long; `design.md` only when a finding involves module boundaries, dependencies or data structures.
+- For each language the repo touches, use the card already in your context and cite its codes; read the full guide in `../../languages/` (`python.md`, `go.md`…) only for a code the card lacks or when no card is in context. Its idioms beat the general catalogs, and the repo's config beats both.
 - Measure control-flow complexity and length of the hot-spot and core functions as `complexity.md` → "Measure; don't guess" says (repo linter rule first, then a run-once tool, else count by hand and say so). Length is K9's count: the function's own lines only, never the imports, types or code around it.
 
 ## 2. Look for

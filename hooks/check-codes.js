@@ -52,7 +52,7 @@ function main() {
   process.stdout.write(JSON.stringify({
     decision: 'block',
     reason: `clean-n-code: the closing line cites codes that don't exist: ${invalid.join(', ')}. ` +
-      'Rewrite only that line, citing codes printed in your context (the rules and any language card), or drop them.',
+      'Rewrite only that line, citing codes that exist (in your context or the catalogs), or drop them.',
   }));
 }
 
